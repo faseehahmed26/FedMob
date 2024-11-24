@@ -1,20 +1,46 @@
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import * as React from "react";
+import { NavigationContainer } from "@react-navigation/native";
+import { createStackNavigator } from "@react-navigation/stack";
+import FirstPage from "./screens/FirstPage";
+import AddImages from "./screens/AddImages";
+import imgClassificationModels from "./screens/imgClassificationModels";
+import FourthPage from "./screens/FourthPage";
+import ImageTask from "./screens/ImageTask";
 
-export default function App() {
+const Stack = createStackNavigator();
+
+const App = () => {
   return (
-    <View style={styles.container}>
-      <Text>Open up App.js to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
+    <NavigationContainer>
+      <Stack.Navigator initialRouteName="FirstPage">
+        <Stack.Screen
+          name="FirstPage"
+          component={FirstPage}
+          options={{ title: "Options" }}
+        />
+        <Stack.Screen
+          name="ImageTask"
+          component={ImageTask}
+          options={{ title: "Image Task" }}
+        />
+        <Stack.Screen
+          name="AddImages"
+          component={AddImages}
+          options={{ title: "Add Images" }}
+        />
+        <Stack.Screen
+          name="imgClassificationModels"
+          component={imgClassificationModels}
+          options={{ title: "Model Selection" }}
+        />
+        {/* <Stack.Screen
+          name="FourthPage"
+          component={FourthPage}
+          options={{ title: "Federated Training" }} */}
+        {/* /> */}
+      </Stack.Navigator>
+    </NavigationContainer>
   );
-}
+};
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+export default App;
