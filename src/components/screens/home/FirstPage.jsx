@@ -42,6 +42,12 @@ const FirstPage = () => {
           <Text style={styles.enabledText}>Image Processing</Text>
           <Text style={styles.availableText}>Classification Available</Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.option}
+          onPress={() => navigation.navigate("ModelGallery")}
+        >
+          <Text style={styles.optionText}>View Stored Models</Text>
+        </TouchableOpacity>
       </View>
 
       <Text style={styles.footerText}>

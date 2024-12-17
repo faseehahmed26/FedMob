@@ -6,6 +6,8 @@ import { navigationConfig, routes } from "./src/navigation/navigationConfig";
 
 // Import all screens
 import FirstPage from "./src/components/screens/home/FirstPage";
+import ModelGallery from "./src/components/screens/home/ModelGallery";
+
 import ImageTask from "./src/components/screens/home/ImageTask";
 import AddImages from "./src/components/screens/classification/AddImages";
 import ModelSelection from "./src/components/screens/classification/ModelSelection";
@@ -52,6 +54,11 @@ const App = () => {
             name="ModelTesting"
             component={ModelTesting}
             options={navigationConfig.screens.ModelTesting}
+          />
+          <Stack.Screen
+            name="ModelGallery"
+            component={ModelGallery}
+            options={navigationConfig.screens.ModelGallery}
           />
         </Stack.Navigator>
       </NavigationContainer>

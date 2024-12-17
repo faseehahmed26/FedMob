@@ -37,11 +37,16 @@ export const navigationConfig = {
       title: "Test Model",
       headerShown: true,
     },
+    ModelGallery: {
+      title: "Stored Models",
+      headerShown: true,
+    },
   },
 };
 
 export const routes = {
   initial: "FirstPage",
+  screens: "ModelGallery",
   classification: {
     start: "ImageTask",
     addImages: "AddImages",

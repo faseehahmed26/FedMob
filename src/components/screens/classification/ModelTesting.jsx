@@ -8,11 +8,13 @@ import {
   TouchableOpacity,
   Alert,
 } from "react-native";
-import { launchImageLibrary } from "react-native-image-picker";
+import * as ImagePicker from "expo-image-picker";
+
 import { useModelContext } from "../../../contexts/ModelContext";
 import { useImageProcessing } from "../../../hooks/useImageProcessing";
 import Button from "../../common/Button";
 import LoadingSpinner from "../../common/LoadingSpinner";
+import SavedModelsSlider from "../home/SavedModelSlider";
 
 const ModelTesting = ({ navigation }) => {
   const { selectedModel } = useModelContext();
@@ -24,12 +26,24 @@ const ModelTesting = ({ navigation }) => {
 
   const selectImage = async () => {
     try {
-      const result = await launchImageLibrary({
-        mediaType: "photo",
+      // const result = await launchImageLibrary({
+      //   mediaType: "photo",
+      //   quality: 1,
+      // });
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: true,
         quality: 1,
       });
-
-      if (result.assets && result.assets[0]) {
+      // if (result.assets && result.assets[0]) {
+      //   setTestImage(result.assets[0]);
+      //   await processImage(result.assets[0].uri);
+      // }
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        // const newImages = result.assets.map((asset) => ({
+        //   id: asset.uri,
+        //   uri: asset.uri,
+        // }));
         setTestImage(result.assets[0]);
         await processImage(result.assets[0].uri);
       }
@@ -75,6 +89,8 @@ const ModelTesting = ({ navigation }) => {
 
   return (
     <ScrollView style={styles.container}>
+      <SavedModelsSlider />
+
       <Text style={styles.title}>Test Your Model</Text>
 
       <View style={styles.imageSection}>
