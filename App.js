@@ -1,45 +1,61 @@
-import * as React from "react";
+import React from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
-import FirstPage from "./screens/FirstPage";
-import AddImages from "./screens/AddImages";
-import imgClassificationModels from "./screens/imgClassificationModels";
-import FourthPage from "./screens/FourthPage";
-import ImageTask from "./screens/ImageTask";
+import { ModelProvider } from "./src/contexts/ModelContext";
+import { navigationConfig, routes } from "./src/navigation/navigationConfig";
 
+// Import all screens
+import FirstPage from "./src/components/screens/home/FirstPage";
+import ImageTask from "./src/components/screens/home/ImageTask";
+import AddImages from "./src/components/screens/classification/AddImages";
+import ModelSelection from "./src/components/screens/classification/ModelSelection";
+import ModelTraining from "./src/components/screens/classification/ModelTraining";
+import ModelTesting from "./src/components/screens/classification/ModelTesting";
+
+// Initialize the stack navigator
 const Stack = createStackNavigator();
 
 const App = () => {
   return (
-    <NavigationContainer>
-      <Stack.Navigator initialRouteName="FirstPage">
-        <Stack.Screen
-          name="FirstPage"
-          component={FirstPage}
-          options={{ title: "Options" }}
-        />
-        <Stack.Screen
-          name="ImageTask"
-          component={ImageTask}
-          options={{ title: "Image Task" }}
-        />
-        <Stack.Screen
-          name="AddImages"
-          component={AddImages}
-          options={{ title: "Add Images" }}
-        />
-        <Stack.Screen
-          name="imgClassificationModels"
-          component={imgClassificationModels}
-          options={{ title: "Model Selection" }}
-        />
-        {/* <Stack.Screen
-          name="FourthPage"
-          component={FourthPage}
-          options={{ title: "Federated Training" }} */}
-        {/* /> */}
-      </Stack.Navigator>
-    </NavigationContainer>
+    <ModelProvider>
+      <NavigationContainer>
+        <Stack.Navigator
+          initialRouteName={routes.initial}
+          screenOptions={navigationConfig.screenOptions}
+        >
+          <Stack.Screen
+            name="FirstPage"
+            component={FirstPage}
+            options={navigationConfig.screens.FirstPage}
+          />
+          <Stack.Screen
+            name="ImageTask"
+            component={ImageTask}
+            options={navigationConfig.screens.ImageTask}
+          />
+          <Stack.Screen
+            name="AddImages"
+            component={AddImages}
+            options={navigationConfig.screens.AddImages}
+          />
+          <Stack.Screen
+            name="ImgClassificationModels"
+            component={ModelSelection}
+            options={navigationConfig.screens.ImgClassificationModels}
+          />
+          <Stack.Screen
+            name="ModelTraining"
+            component={ModelTraining}
+            options={navigationConfig.screens.ModelTraining}
+          />
+          <Stack.Screen
+            name="ModelTesting"
+            component={ModelTesting}
+            options={navigationConfig.screens.ModelTesting}
+          />
+        </Stack.Navigator>
+      </NavigationContainer>
+    </ModelProvider>
   );
 };
 
