@@ -1,0 +1,16 @@
+version: "3.8"
+
+services:
+  envoy:
+    image: envoyproxy/envoy:v1.28-latest
+    ports:
+      - "8081:8081" # gRPC-Web port for mobile clients
+    volumes:
+      - ./envoy.yaml:/etc/envoy/envoy.yaml
+    command: /usr/local/bin/envoy -c /etc/envoy/envoy.yaml
+    networks:
+      - fedmob-network
+
+networks:
+  fedmob-network:
+    driver: bridge
