@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "FedMob",
+    "slug": "fedmob",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.fedmob.mobileclient"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.fedmob.mobileclient"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}
