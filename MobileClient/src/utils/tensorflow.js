@@ -5,27 +5,10 @@
 
 import * as tf from '@tensorflow/tfjs';
 import '@tensorflow/tfjs-backend-cpu';
-import '@tensorflow/tfjs-backend-webgl';
 import { Platform } from 'react-native';
-import * as tfn from '@tensorflow/tfjs-react-native';
+import '@tensorflow/tfjs-react-native';
 
-// Initialize TF.js in an IIFE
-(async () => {
-  try {
-    // First, wait for the React Native TF backend to be ready
-    await tfn.ready();
-
-    // Then initialize the CPU backend
-    await tf.setBackend('cpu');
-    await tf.ready();
-
-    console.log('TensorFlow.js initialized with CPU backend');
-    console.log('TF Backend:', tf.getBackend());
-    console.log('TF Memory:', tf.memory());
-  } catch (error) {
-    console.error('Failed to initialize TensorFlow.js:', error);
-  }
-})();
+// No IIFE initialization - we'll do it in the initialize() method
 
 class TensorFlowManager {
   constructor() {
@@ -42,23 +25,27 @@ class TensorFlowManager {
 
       console.log('Initializing TensorFlow.js...');
 
-      // First initialize tfjs-react-native
-      await tfn.ready();
-      console.log('tfjs-react-native ready');
-
-      // Force CPU backend registration and wait for it
+      // Force CPU backend on React Native to avoid rn-webgl init warnings
       await tf.setBackend('cpu');
       await tf.ready();
+      console.log('TensorFlow.js ready');
 
-      // Configure for mobile
-      tf.enableProdMode();
-      tf.env().set('WEBGL_DELETE_TEXTURE_THRESHOLD', 0);
+      // Basic debug (avoid WebGL-specific flags on RN)
+      console.log('Debug: TF initialization details:', {
+        backend: tf.getBackend(),
+        engine: tf.engine() !== undefined,
+        optimizers: Object.keys(tf.train),
+        memory: tf.memory(),
+      });
+
+      // Double check backend is set
+      const backend = tf.getBackend();
 
       this.isInitialized = true;
-      this.backend = 'cpu';
+      this.backend = backend;
 
       console.log('TensorFlow.js initialized successfully');
-      console.log(`Backend: ${tf.getBackend()}`);
+      console.log(`Backend: ${backend}`);
       console.log('Memory state:', tf.memory());
 
       return true;
@@ -140,6 +127,7 @@ class TensorFlowManager {
         inputShape = [28, 28, 1],
         numClasses = 10,
         learningRate = 0.01,
+        modelVariant = 'basic', // 'basic' | 'lenet'
       } = config;
 
       console.log('Debug: Creating model with config:', {
@@ -170,63 +158,115 @@ class TensorFlowManager {
         }
       };
 
-      // Input layer
-      addLayerWithDebug(tf.layers.inputLayer({ inputShape }), 'input');
-
-      // First conv block
-      addLayerWithDebug(
-        tf.layers.conv2d({
-          filters: 32,
-          kernelSize: 3,
-          activation: 'relu',
-          name: 'conv2d_1',
-        }),
-        'conv2d_1',
-      );
-      addLayerWithDebug(
-        tf.layers.maxPooling2d({
-          poolSize: 2,
-          name: 'max_pooling2d_1',
-        }),
-        'maxpool_1',
-      );
-
-      // Second conv block
-      addLayerWithDebug(
-        tf.layers.conv2d({
-          filters: 64,
-          kernelSize: 3,
-          activation: 'relu',
-          name: 'conv2d_2',
-        }),
-        'conv2d_2',
-      );
-      addLayerWithDebug(
-        tf.layers.maxPooling2d({
-          poolSize: 2,
-          name: 'max_pooling2d_2',
-        }),
-        'maxpool_2',
-      );
-
-      // Flatten and dense layers
-      addLayerWithDebug(tf.layers.flatten({ name: 'flatten' }), 'flatten');
-      addLayerWithDebug(
-        tf.layers.dense({
-          units: 128,
-          activation: 'relu',
-          name: 'dense_1',
-        }),
-        'dense_1',
-      );
-      addLayerWithDebug(
-        tf.layers.dense({
-          units: numClasses,
-          activation: 'softmax',
-          name: 'dense_2',
-        }),
-        'dense_2',
-      );
+      // Build architecture by variant
+      if (modelVariant === 'lenet') {
+        // LeNet-5 style for 28x28x1
+        addLayerWithDebug(tf.layers.inputLayer({ inputShape }), 'input');
+        addLayerWithDebug(
+          tf.layers.conv2d({
+            filters: 6,
+            kernelSize: 5,
+            strides: 1,
+            padding: 'same',
+            activation: 'relu',
+            name: 'lenet_conv1',
+          }),
+          'lenet_conv1',
+        );
+        addLayerWithDebug(
+          tf.layers.maxPooling2d({
+            poolSize: 2,
+            strides: 2,
+            name: 'lenet_pool1',
+          }),
+          'lenet_pool1',
+        );
+        addLayerWithDebug(
+          tf.layers.conv2d({
+            filters: 16,
+            kernelSize: 5,
+            strides: 1,
+            padding: 'same',
+            activation: 'relu',
+            name: 'lenet_conv2',
+          }),
+          'lenet_conv2',
+        );
+        addLayerWithDebug(
+          tf.layers.maxPooling2d({
+            poolSize: 2,
+            strides: 2,
+            name: 'lenet_pool2',
+          }),
+          'lenet_pool2',
+        );
+        addLayerWithDebug(
+          tf.layers.flatten({ name: 'lenet_flatten' }),
+          'lenet_flatten',
+        );
+        addLayerWithDebug(
+          tf.layers.dense({
+            units: 120,
+            activation: 'relu',
+            name: 'lenet_fc1',
+          }),
+          'lenet_fc1',
+        );
+        addLayerWithDebug(
+          tf.layers.dense({ units: 84, activation: 'relu', name: 'lenet_fc2' }),
+          'lenet_fc2',
+        );
+        addLayerWithDebug(
+          tf.layers.dense({
+            units: numClasses,
+            activation: 'softmax',
+            name: 'output',
+          }),
+          'output',
+        );
+      } else {
+        // Basic CNN (default), similar to user-provided basic CNN but adapted to 28x28x1
+        addLayerWithDebug(tf.layers.inputLayer({ inputShape }), 'input');
+        addLayerWithDebug(
+          tf.layers.conv2d({
+            filters: 32,
+            kernelSize: 3,
+            activation: 'relu',
+            name: 'conv2d_1',
+          }),
+          'conv2d_1',
+        );
+        addLayerWithDebug(
+          tf.layers.maxPooling2d({ poolSize: 2, name: 'max_pooling2d_1' }),
+          'maxpool_1',
+        );
+        addLayerWithDebug(
+          tf.layers.conv2d({
+            filters: 64,
+            kernelSize: 3,
+            activation: 'relu',
+            name: 'conv2d_2',
+          }),
+          'conv2d_2',
+        );
+        addLayerWithDebug(
+          tf.layers.maxPooling2d({ poolSize: 2, name: 'max_pooling2d_2' }),
+          'maxpool_2',
+        );
+        addLayerWithDebug(tf.layers.flatten({ name: 'flatten' }), 'flatten');
+        addLayerWithDebug(
+          tf.layers.dense({ units: 128, activation: 'relu', name: 'dense_1' }),
+          'dense_1',
+        );
+        addLayerWithDebug(
+          tf.layers.dense({
+            units: numClasses,
+            activation: 'softmax',
+            name: 'dense_2',
+          }),
+          'dense_2',
+        );
+      }
 
       // Debug: Check model state before compile
       console.log('Debug: Model state before compile:', {
@@ -236,25 +276,40 @@ class TensorFlowManager {
         optimizer: 'adam',
       });
 
-      // Compile with debug
+      // Create optimizer first
       try {
         console.log('Debug: Starting model compilation');
+
+        // Debug: Check TF state before compilation
+        console.log('Debug: TF state pre-compilation:', {
+          backend: tf.getBackend(),
+          engine: tf.engine() !== undefined,
+          registeredOptimizers: Object.keys(tf.train),
+          modelState: {
+            built: model.built,
+            weights: model.weights.length,
+            layers: model.layers.map(l => ({
+              name: l.name,
+              built: l.built,
+              trainable: l.trainable,
+            })),
+          },
+        });
+
+        // Try creating optimizer explicitly first
+        console.log('Debug: Creating optimizer instance');
+        // const optimizer = tf.train.adam(0.01);
+        // console.log('Debug: Optimizer created:', optimizer);
+
+        // Compile with explicit optimizer instance
         model.compile({
-          optimizer: 'adam',
+          optimizer: tf.train.adam(learningRate || 0.01),
           loss: 'categoricalCrossentropy',
           metrics: ['accuracy'],
         });
         console.log('Debug: Model compiled successfully');
       } catch (e) {
         console.error('Debug: Compilation failed:', e);
-        // Debug: Check if optimizer is the issue
-        try {
-          console.log('Debug: Testing optimizer creation');
-          const testOptimizer = tf.train.adam(learningRate);
-          console.log('Debug: Optimizer created successfully:', testOptimizer);
-        } catch (optError) {
-          console.error('Debug: Failed to create optimizer:', optError);
-        }
         throw e;
       }
 

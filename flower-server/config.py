@@ -26,6 +26,7 @@ class ServerConfig:
     
     # Model settings
     MODEL_NAME = "mnist_cnn"
+    MODEL_VARIANT = "basic"  # 'basic' | 'lenet'
     INPUT_SHAPE = (28, 28, 1)
     NUM_CLASSES = 10
     
@@ -46,7 +47,8 @@ class ServerConfig:
             "epochs": cls.EPOCHS_PER_ROUND,
             "batch_size": cls.BATCH_SIZE,
             "learning_rate": cls.LEARNING_RATE,
-            "model_name": cls.MODEL_NAME
+            "model_name": cls.MODEL_NAME,
+            "model_variant": cls.MODEL_VARIANT,
         }
     
     @classmethod
@@ -55,7 +57,8 @@ class ServerConfig:
         return {
             "round": round_num,
             "batch_size": cls.BATCH_SIZE,
-            "model_name": cls.MODEL_NAME
+            "model_name": cls.MODEL_NAME,
+            "model_variant": cls.MODEL_VARIANT,
         }
     
     @classmethod

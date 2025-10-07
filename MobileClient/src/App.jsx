@@ -20,7 +20,7 @@ const App = () => {
   // State management
   const [client, setClient] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
-  const [serverAddress, setServerAddress] = useState('192.168.1.100:8081');
+  const [serverAddress, setServerAddress] = useState('10.5.1.254:8082');
   const [clientId, setClientId] = useState(`mobile_${Date.now()}`);
   const [currentRound, setCurrentRound] = useState(0);
   const [trainingStatus, setTrainingStatus] = useState('idle');
@@ -44,12 +44,14 @@ const App = () => {
         flowerClient.onRoundStart = round => {
           setCurrentRound(round);
           setProgress(0);
+          setTrainingStatus('training');
           addLog(`Starting round ${round}`);
         };
 
         flowerClient.onRoundComplete = (round, roundMetrics) => {
           setMetrics(roundMetrics);
           setProgress(100);
+          setTrainingStatus('completed');
           addLog(`Completed round ${round}`);
         };
 
@@ -145,10 +147,7 @@ const App = () => {
       setTrainingStatus('training');
       setProgress(0);
 
-      await client.startFederatedLearning();
-
-      setTrainingStatus('completed');
-      addLog('✅ Federated learning completed');
+      await client.startTraining(currentRound);
     } catch (error) {
       setTrainingStatus('error');
       addLog(`❌ FL error: ${error.message}`);
@@ -302,7 +301,7 @@ const App = () => {
             )}
 
             {/* Metrics Display */}
-            {Object.keys(metrics).length > 0 && (
+            {metrics && Object.keys(metrics).length > 0 && (
               <View style={styles.metricsContainer}>
                 <Text style={styles.metricsTitle}>Training Metrics:</Text>
                 {Object.entries(metrics).map(([key, value]) => (

@@ -104,62 +104,66 @@ class MNISTModelUtils:
     """Utilities specific to MNIST model handling"""
     
     @staticmethod
-    def create_model_architecture() -> Dict[str, Any]:
-        """Create standard MNIST CNN architecture"""
-        architecture = {
+    def create_model_architecture(variant: str = "basic") -> Dict[str, Any]:
+        """Create MNIST CNN architecture for given variant ('basic'|'lenet')"""
+        if variant == "lenet":
+            return {
+                "input_shape": [28, 28, 1],
+                "num_classes": 10,
+                "layers": [
+                    {"type": "conv2d", "filters": 6, "kernel_size": [5, 5], "activation": "relu", "padding": "same", "input_shape": [28, 28, 1]},
+                    {"type": "max_pooling2d", "pool_size": [2, 2], "strides": [2, 2]},
+                    {"type": "conv2d", "filters": 16, "kernel_size": [5, 5], "activation": "relu", "padding": "same"},
+                    {"type": "max_pooling2d", "pool_size": [2, 2], "strides": [2, 2]},
+                    {"type": "flatten"},
+                    {"type": "dense", "units": 120, "activation": "relu"},
+                    {"type": "dense", "units": 84, "activation": "relu"},
+                    {"type": "dense", "units": 10, "activation": "softmax"},
+                ],
+            }
+        # default basic
+        return {
             "input_shape": [28, 28, 1],
             "num_classes": 10,
             "layers": [
-                {
-                    "type": "conv2d",
-                    "filters": 32,
-                    "kernel_size": [3, 3],
-                    "activation": "relu",
-                    "input_shape": [28, 28, 1]
-                },
-                {
-                    "type": "max_pooling2d",
-                    "pool_size": [2, 2]
-                },
-                {
-                    "type": "conv2d",
-                    "filters": 64,
-                    "kernel_size": [3, 3],
-                    "activation": "relu"
-                },
-                {
-                    "type": "max_pooling2d",
-                    "pool_size": [2, 2]
-                },
-                {
-                    "type": "flatten"
-                },
-                {
-                    "type": "dense",
-                    "units": 128,
-                    "activation": "relu"
-                },
-                {
-                    "type": "dense",
-                    "units": 10,
-                    "activation": "softmax"
-                }
-            ]
+                {"type": "conv2d", "filters": 32, "kernel_size": [3, 3], "activation": "relu", "input_shape": [28, 28, 1]},
+                {"type": "max_pooling2d", "pool_size": [2, 2]},
+                {"type": "conv2d", "filters": 64, "kernel_size": [3, 3], "activation": "relu"},
+                {"type": "max_pooling2d", "pool_size": [2, 2]},
+                {"type": "flatten"},
+                {"type": "dense", "units": 128, "activation": "relu"},
+                {"type": "dense", "units": 10, "activation": "softmax"},
+            ],
         }
-        return architecture
     
     @staticmethod
-    def get_expected_weights_shape() -> List[tuple]:
-        """Get expected shape for MNIST CNN weights"""
+    def get_expected_weights_shape(variant: str = "basic") -> List[tuple]:
+        """Get expected shape for MNIST CNN weights for the given variant"""
+        if variant == "lenet":
+            # Shapes correspond to tfjs flattened ordering converted to numpy
+            return [
+                (5, 5, 1, 6),
+                (6,),
+                (5, 5, 6, 16),
+                (16,),
+                # After conv/pool stack, flatten size is 7*7*16 = 784 for 28x28 inputs
+                (7 * 7 * 16, 120),
+                (120,),
+                (120, 84),
+                (84,),
+                (84, 10),
+                (10,),
+            ]
+        # basic
         return [
-            (3, 3, 1, 32),    # Conv2D layer 1
-            (32,),             # Conv2D bias 1
-            (3, 3, 32, 64),    # Conv2D layer 2
-            (64,),             # Conv2D bias 2
-            (5, 5, 64, 128),   # Dense layer 1 (flattened)
-            (128,),            # Dense bias 1
-            (128, 10),         # Dense layer 2
-            (10,)              # Dense bias 2
+            (3, 3, 1, 32),
+            (32,),
+            (3, 3, 32, 64),
+            (64,),
+            (5 * 5 * 64, 128),  # 28->26->13->11->5 after two conv(3) + pool(2)
+            (128,),
+            (128, 10),
+            (10,),
         ]
     
     @staticmethod

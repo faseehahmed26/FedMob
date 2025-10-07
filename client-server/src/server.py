@@ -12,6 +12,9 @@ from typing import Dict, List, Optional
 import tensorflow as tf
 from model_converter import ModelConverter
 from client_manager import ClientManager
+from monitoring import FedMobMonitor
+from flower_client_manager import FlowerClientManager
+from message_handler import MessageHandler, MessageContext
 
 # Configure logging
 logging.basicConfig(
@@ -25,6 +28,9 @@ class ClientServer:
         self.host = host
         self.port = port
         self.client_manager = ClientManager()
+        self.monitor = FedMobMonitor()
+        self.flower_manager = FlowerClientManager()
+        self.message_handler = MessageHandler()
         
     async def handle_client(self, websocket: websockets.WebSocketServerProtocol, path: str):
         """Handle individual client connection"""
@@ -38,8 +44,9 @@ class ClientServer:
                 client_id = data["client_id"]
                 logger.info(f"Client {client_id} connected")
                 
-                # Add client to manager
+                # Add client to managers
                 self.client_manager.add_client(client_id, websocket)
+                self.flower_manager.get_or_create_client(client_id)
                 
                 # Send acknowledgment
                 await websocket.send(json.dumps({
@@ -61,6 +68,7 @@ class ClientServer:
         finally:
             if client_id:
                 self.client_manager.remove_client(client_id)
+                self.flower_manager.remove_client(client_id)
                 logger.info(f"Client {client_id} disconnected")
                 
     async def handle_message(self, client_id: str, message: Dict):
@@ -74,48 +82,31 @@ class ClientServer:
             message_type = message["type"]
             self.client_manager.update_client_activity(client_id)
             
+            # Get Flower client for this mobile client
+            flower_client = self.flower_manager.get_client(client_id)
+            if not flower_client and message_type != "register":
+                logger.error(f"No Flower client for {client_id}")
+                return
+                
+            # Create send function for this client
+            send_fn = lambda msg: self.send_message(client_id, msg)
+            
+            # Handle message through message handler
+            await self.message_handler.handle_mobile_message(
+                client_id,
+                message,
+                flower_client
+            )
+            
+            # Update client state based on message type
             if message_type == "start_training":
-                # Handle training start request
                 round_num = message.get("round", 0)
                 self.client_manager.start_client_training(client_id, round_num)
-                await self.send_message(client_id, {
-                    "type": "training_started",
-                    "round": round_num
-                })
-                
             elif message_type == "training_update":
-                # Handle training progress update
                 progress = message.get("progress", 0)
                 self.client_manager.update_training_progress(client_id, progress)
-                
-            elif message_type == "update_weights":
-                # Handle weight updates from mobile client
-                try:
-                    tfjs_weights = message.get("weights", [])
-                    # Convert weights from TF.js to Python TF format
-                    tf_weights = ModelConverter.tfjs_to_tf_weights(tfjs_weights)
-                    logger.info(f"Converted weights from client {client_id}")
-                    
-                    # TODO: Send weights to Flower server
-                    # For now, just acknowledge
-                    await self.send_message(client_id, {
-                        "type": "weights_received",
-                        "status": "success"
-                    })
-                except Exception as e:
-                    logger.error(f"Error converting weights: {e}")
-                    await self.send_message(client_id, {
-                        "type": "weights_received",
-                        "status": "error",
-                        "error": str(e)
-                    })
-                    
             elif message_type == "training_complete":
-                # Handle training completion
                 self.client_manager.complete_client_training(client_id)
-                await self.send_message(client_id, {
-                    "type": "training_acknowledged"
-                })
                 
         except Exception as e:
             logger.error(f"Error handling message from client {client_id}: {e}")
@@ -125,7 +116,9 @@ class ClientServer:
         try:
             client = self.client_manager.get_client(client_id)
             if client:
-                await client.websocket.send(json.dumps(message))
+                # Accept either dict or pre-encoded JSON string
+                payload = json.dumps(message) if isinstance(message, dict) else message
+                await client.websocket.send(payload)
             else:
                 logger.error(f"Cannot send message - unknown client {client_id}")
         except Exception as e:
@@ -153,22 +146,49 @@ class ClientServer:
         """Start the WebSocket server"""
         logger.info(f"Starting server on {self.host}:{self.port}")
         
+        # Initialize message handler with current loop
+        self.message_handler.initialize(asyncio.get_event_loop())
+        
         # Start cleanup task
         asyncio.create_task(self.cleanup_inactive_clients())
         
+        # Start message handler
+        asyncio.create_task(self.message_handler.start())
+        
+        # Create standard message handlers
+        def create_send_fn(client_id):
+            return lambda msg: self.send_message(client_id, msg)
+            
+        def get_flower_client(client_id):
+            return self.flower_manager.get_client(client_id)
+            
+        self.message_handler.create_standard_handlers(
+            create_send_fn,
+            get_flower_client
+        )
+        
         # Start server
         async with websockets.serve(self.handle_client, self.host, self.port):
-            await asyncio.Future()  # run forever
+            try:
+                await asyncio.Future()  # run forever
+            finally:
+                await self.message_handler.stop()
 
 def main():
     """Main entry point"""
     server = ClientServer()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     try:
-        asyncio.run(server.start())
+        loop.run_until_complete(server.start())
+        loop.run_forever()
     except KeyboardInterrupt:
         logger.info("Server stopped by user")
+        loop.stop()
     except Exception as e:
         logger.error(f"Server error: {e}")
+    finally:
+        loop.close()
 
 if __name__ == "__main__":
     main()

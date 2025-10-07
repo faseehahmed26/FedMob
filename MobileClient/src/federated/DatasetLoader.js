@@ -96,8 +96,14 @@ class DatasetLoader {
 
       this.isLoaded = true;
       console.log('Local data loaded successfully');
-      console.log(`Training samples: ${this.X_train.length}`);
-      console.log(`Test samples: ${this.X_test.length}`);
+      console.log(
+        `Training samples: ${
+          this.X_train.shape ? this.X_train.shape[0] : 'n/a'
+        }`,
+      );
+      console.log(
+        `Test samples: ${this.X_test.shape ? this.X_test.shape[0] : 'n/a'}`,
+      );
     } catch (error) {
       console.error('Failed to load local data:', error);
       throw error;
@@ -112,8 +118,8 @@ class DatasetLoader {
       console.log('Generating synthetic MNIST data...');
 
       // Generate random data that mimics MNIST structure
-      const numTrainSamples = 100; // Reduced for mobile
-      const numTestSamples = 200;
+      const numTrainSamples = 32; // Further reduced for debug speed on-device
+      const numTestSamples = 64;
       const imageSize = 28 * 28; // 28x28 pixels
       const numClasses = 10;
 

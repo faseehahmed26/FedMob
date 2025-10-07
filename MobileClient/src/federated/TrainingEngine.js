@@ -11,6 +11,7 @@ class TrainingEngine {
     this.trainingHistory = [];
     this.currentEpoch = 0;
     this.currentBatch = 0;
+    this.onEpochEnd = null; // optional callback invoked after each epoch
   }
 
   /**
@@ -25,7 +26,7 @@ class TrainingEngine {
     try {
       const {
         epochs = 1,
-        batchSize = 32,
+        batchSize = 8,
         learningRate = 0.01,
         validationSplit = 0.1,
       } = config;
@@ -96,6 +97,26 @@ class TrainingEngine {
             )}, Val Accuracy: ${valResults.accuracy.toFixed(4)}`,
           );
         }
+
+        // Notify after each epoch if a callback is provided
+        if (typeof this.onEpochEnd === 'function') {
+          try {
+            const progress = (epoch + 1) / epochs;
+            await this.onEpochEnd({
+              epoch,
+              epochs,
+              progress,
+              metrics: {
+                loss: epochResults.loss,
+                accuracy: epochResults.accuracy,
+                valLoss: valResults?.loss,
+                valAccuracy: valResults?.accuracy,
+              },
+            });
+          } catch (e) {
+            console.warn('onEpochEnd hook failed:', e);
+          }
+        }
       }
 
       // Calculate final metrics
@@ -160,6 +181,7 @@ class TrainingEngine {
       let totalAccuracy = 0;
       let processedSamples = 0;
 
+      const epochStart = Date.now();
       for (let batch = 0; batch < numBatches; batch++) {
         this.currentBatch = batch;
 
@@ -171,7 +193,14 @@ class TrainingEngine {
         const y_batch = y.slice([start, 0], [end - start, -1]);
 
         // Train on batch
+        const batchStart = Date.now();
         const batchResults = await this.trainBatch(model, X_batch, y_batch);
+        const batchMs = Date.now() - batchStart;
+        console.log(
+          `Batch ${batch + 1}/${numBatches} size=${end - start} loss=${
+            batchResults.loss
+          } acc=${batchResults.accuracy} (${batchMs}ms)`,
+        );
 
         totalLoss += batchResults.loss * (end - start);
         totalAccuracy += batchResults.accuracy * (end - start);
@@ -186,6 +215,9 @@ class TrainingEngine {
           await new Promise(resolve => setTimeout(resolve, 1));
         }
       }
+
+      const epochMs = Date.now() - epochStart;
+      console.log(`Epoch finished in ${epochMs}ms`);
 
       return {
         loss: totalLoss / processedSamples,
@@ -206,18 +238,47 @@ class TrainingEngine {
    */
   async trainBatch(model, X_batch, y_batch, learningRate = 0.01) {
     try {
-      // Use model.fit for training (simpler approach)
-      const history = await model.fit(X_batch, y_batch, {
-        epochs: 1,
-        verbose: 0,
-        batchSize: X_batch.shape[0],
-      });
+      // Prefer trainOnBatch on RN CPU to avoid potential fit()-related hangs
+      console.log(
+        `trainBatch: starting trainOnBatch with batchSize=${X_batch.shape[0]}`,
+      );
+      const lossResult = await model.trainOnBatch(X_batch, y_batch);
+      let finalLoss = 0;
+      if (Array.isArray(lossResult)) {
+        // Could be [loss, ...metrics]
+        const first = lossResult[0];
+        if (typeof first === 'number') {
+          finalLoss = first;
+        } else if (first && typeof first.data === 'function') {
+          const arr = await first.data();
+          finalLoss = Array.isArray(arr) ? arr[0] : arr;
+          first.dispose?.();
+        }
+        // Dispose any tensor entries
+        lossResult.forEach(t => t && t.dispose && t.dispose());
+      } else if (typeof lossResult === 'number') {
+        finalLoss = lossResult;
+      } else if (lossResult && typeof lossResult.data === 'function') {
+        const arr = await lossResult.data();
+        finalLoss = Array.isArray(arr) ? arr[0] : arr;
+        lossResult.dispose?.();
+      }
 
-      // Get loss and accuracy from history
-      const finalLoss = history.history.loss[0];
-      const finalAccuracy = history.history.acc
-        ? history.history.acc[0]
-        : history.history.accuracy[0] || 0; // Fix: check for 'accuracy' key
+      // Compute accuracy manually
+      const preds = model.predict(X_batch);
+      const accTensor = this.calculateAccuracy(y_batch, preds);
+      const accArray = await accTensor.data();
+      const finalAccuracy = Array.isArray(accArray) ? accArray[0] : accArray;
+      if (Array.isArray(preds)) {
+        preds.forEach(t => t.dispose());
+      } else {
+        preds.dispose();
+      }
+      accTensor.dispose();
+
+      console.log(
+        `trainBatch: done trainOnBatch loss=${finalLoss} acc=${finalAccuracy}`,
+      );
 
       return {
         loss: finalLoss,

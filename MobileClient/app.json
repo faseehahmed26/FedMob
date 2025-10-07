@@ -2,6 +2,7 @@
   "expo": {
     "name": "FedMob",
     "slug": "fedmob",
+    "newArchEnabled": true,
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "platforms": [

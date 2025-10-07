@@ -27,7 +27,8 @@ class FedMobServer:
             "round": str(server_round),
             "epochs": "1",  # Single epoch per round for mobile efficiency
             "batch_size": "32",
-            "learning_rate": "0.01"
+            "learning_rate": "0.01",
+            "model_variant": "basic",
         }
         logger.info(f"Round {server_round}: Sending config {config}")
         return config
@@ -36,7 +37,8 @@ class FedMobServer:
         """Return evaluation configuration for each round"""
         config = {
             "round": str(server_round),
-            "batch_size": "32"
+            "batch_size": "32",
+            "model_variant": "basic",
         }
         return config
     
