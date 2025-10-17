@@ -15,11 +15,15 @@ class FlowerClientManager:
     def __init__(self):
         self.clients: Dict[str, FedMobFlowerClient] = {}
         
-    def get_or_create_client(self, mobile_client_id: str) -> FedMobFlowerClient:
+    def get_or_create_client(self, mobile_client_id: str, message_handler=None, send_to_mobile=None) -> FedMobFlowerClient:
         """Get existing client or create new one"""
         if mobile_client_id not in self.clients:
             logger.info(f"Creating new Flower client for mobile client {mobile_client_id}")
-            self.clients[mobile_client_id] = FedMobFlowerClient(mobile_client_id)
+            self.clients[mobile_client_id] = FedMobFlowerClient(
+                mobile_client_id, 
+                message_handler=message_handler,
+                send_to_mobile=send_to_mobile
+            )
         return self.clients[mobile_client_id]
         
     def get_client(self, mobile_client_id: str) -> Optional[FedMobFlowerClient]:

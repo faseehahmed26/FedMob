@@ -14,6 +14,7 @@ from model_converter import ModelConverter
 from client_manager import ClientManager
 from monitoring import FedMobMonitor
 from flower_client_manager import FlowerClientManager
+from flower_connection import FlowerConnection
 from message_handler import MessageHandler, MessageContext
 
 # Configure logging
@@ -24,12 +25,14 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class ClientServer:
-    def __init__(self, host: str = "0.0.0.0", port: int = 8082):
+    def __init__(self, host: str = "0.0.0.0", port: int = 8082, flower_server_address: str = "localhost:8080"):
         self.host = host
         self.port = port
+        self.flower_server_address = flower_server_address
         self.client_manager = ClientManager()
         self.monitor = FedMobMonitor()
         self.flower_manager = FlowerClientManager()
+        self.flower_connection = FlowerConnection(flower_server_address)
         self.message_handler = MessageHandler()
         
     async def handle_client(self, websocket: websockets.WebSocketServerProtocol, path: str):
@@ -46,7 +49,22 @@ class ClientServer:
                 
                 # Add client to managers
                 self.client_manager.add_client(client_id, websocket)
-                self.flower_manager.get_or_create_client(client_id)
+                
+                # Create send function for this client
+                send_fn = lambda msg: self.send_message(client_id, msg)
+                
+                # Create Flower client with proper dependencies
+                flower_client = self.flower_manager.get_or_create_client(
+                    client_id, 
+                    message_handler=self.message_handler,
+                    send_to_mobile=send_fn
+                )
+                
+                # Add to Flower connection
+                self.flower_connection.add_flower_client(client_id, flower_client)
+                
+                # Start Flower client connection
+                await self.flower_connection.start_flower_client(client_id, flower_client)
                 
                 # Send acknowledgment
                 await websocket.send(json.dumps({
@@ -69,6 +87,8 @@ class ClientServer:
             if client_id:
                 self.client_manager.remove_client(client_id)
                 self.flower_manager.remove_client(client_id)
+                await self.flower_connection.stop_flower_client(client_id)
+                self.flower_connection.remove_flower_client(client_id)
                 logger.info(f"Client {client_id} disconnected")
                 
     async def handle_message(self, client_id: str, message: Dict):
@@ -128,7 +148,7 @@ class ClientServer:
         """Periodically remove inactive clients"""
         while True:
             try:
-                inactive_clients = self.client_manager.get_inactive_clients(timeout=300)  # 5 minutes
+                inactive_clients = self.client_manager.get_inactive_clients(timeout=600)  # 10 minutes
                 for client_id in inactive_clients:
                     logger.warning(f"Removing inactive client {client_id}")
                     self.client_manager.remove_client(client_id)

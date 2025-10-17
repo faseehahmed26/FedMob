@@ -16,12 +16,14 @@ logger = logging.getLogger(__name__)
 class FedMobFlowerClient(fl.client.Client):
     """Flower client that bridges mobile clients with Flower server"""
     
-    def __init__(self, mobile_client_id: str):
+    def __init__(self, mobile_client_id: str, message_handler=None, send_to_mobile=None):
         self.mobile_client_id = mobile_client_id
         self.current_weights = None
         self.current_config = None
         self.training_finished = asyncio.Event()
         self.training_result = None
+        self.message_handler = message_handler
+        self.send_to_mobile = send_to_mobile
         
     def get_parameters(self, config: Dict[str, str]) -> fl.common.NDArrays:
         """Get current model parameters"""

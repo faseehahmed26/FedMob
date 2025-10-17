@@ -25,7 +25,7 @@ class TrainingEngine {
   async trainModel(model, X_train, y_train, config = {}) {
     try {
       const {
-        epochs = 1,
+        epochs = 10,
         batchSize = 8,
         learningRate = 0.01,
         validationSplit = 0.1,
@@ -245,36 +245,40 @@ class TrainingEngine {
       const lossResult = await model.trainOnBatch(X_batch, y_batch);
       let finalLoss = 0;
       if (Array.isArray(lossResult)) {
-        // Could be [loss, ...metrics]
-        const first = lossResult[0];
-        if (typeof first === 'number') {
-          finalLoss = first;
-        } else if (first && typeof first.data === 'function') {
-          const arr = await first.data();
+        // Could be [loss, ...metrics]; extract loss safely and dispose tensors once
+        const maybeTensor = lossResult[0];
+        if (typeof maybeTensor === 'number') {
+          finalLoss = maybeTensor;
+        } else if (maybeTensor && typeof maybeTensor.data === 'function') {
+          const arr = await maybeTensor.data();
           finalLoss = Array.isArray(arr) ? arr[0] : arr;
-          first.dispose?.();
         }
-        // Dispose any tensor entries
-        lossResult.forEach(t => t && t.dispose && t.dispose());
+        // Dispose only tensor entries (avoid double-dispose)
+        lossResult.forEach(t => {
+          if (t && typeof t.dispose === 'function') {
+            t.dispose();
+          }
+        });
       } else if (typeof lossResult === 'number') {
         finalLoss = lossResult;
       } else if (lossResult && typeof lossResult.data === 'function') {
         const arr = await lossResult.data();
         finalLoss = Array.isArray(arr) ? arr[0] : arr;
-        lossResult.dispose?.();
+        if (typeof lossResult.dispose === 'function') {
+          lossResult.dispose();
+        }
       }
 
-      // Compute accuracy manually
-      const preds = model.predict(X_batch);
-      const accTensor = this.calculateAccuracy(y_batch, preds);
-      const accArray = await accTensor.data();
-      const finalAccuracy = Array.isArray(accArray) ? accArray[0] : accArray;
-      if (Array.isArray(preds)) {
-        preds.forEach(t => t.dispose());
-      } else {
-        preds.dispose();
-      }
-      accTensor.dispose();
+      // Compute accuracy with tidy to ensure intermediates are cleaned, but keep scalar
+      const finalAccuracy = await tf
+        .tidy(() => {
+          const preds = model.predict(X_batch);
+          const accTensor = this.calculateAccuracy(y_batch, preds);
+          // Return a clone so we can read outside tidy
+          return accTensor.clone();
+        })
+        .data()
+        .then(arr => (Array.isArray(arr) ? arr[0] : arr));
 
       console.log(
         `trainBatch: done trainOnBatch loss=${finalLoss} acc=${finalAccuracy}`,

@@ -78,7 +78,7 @@ class FlowerClient {
         }
 
         // Debug: reduce epochs for faster on-device iteration
-        const totalEpochs = 2;
+        const totalEpochs = 10;
         const updateInterval = 1;
         this.trainingEngine.onEpochEnd = async ({
           epoch,
@@ -107,7 +107,7 @@ class FlowerClient {
         };
 
         // Train local model for one round
-        console.log('[FL] Starting local training for 2 epochs (debug)...');
+        console.log('[FL] Starting local training for 10 epochs (debug)...');
         const result = await this.trainingEngine.trainModel(
           this.model,
           this.datasetLoader.X_train,
