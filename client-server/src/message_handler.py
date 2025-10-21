@@ -49,30 +49,41 @@ class MessageHandler:
                             websocket_send: Callable):
         """Send message to mobile client"""
         try:
+            print(f"📤 [MESSAGE HANDLER] Sending to mobile {client_id}: {message.get('type')}")
+            print(f"📤 [MESSAGE HANDLER] Message keys: {list(message.keys())}")
             # websocket_send may be a function returning a send callable; resolve it
             send_callable = websocket_send(client_id) if callable(websocket_send) else websocket_send
             # Pass raw dict; lower layer will JSON-encode once
             await send_callable(message)
+            print(f"✅ [MESSAGE HANDLER] Successfully sent to mobile {client_id}")
             logger.debug(f"Sent to mobile client {client_id}: {message['type']}")
         except Exception as e:
+            print(f"❌ [MESSAGE HANDLER] Error sending to mobile {client_id}: {e}")
             logger.error(f"Error sending to mobile client {client_id}: {e}")
             
     async def send_to_flower(self, client_id: str, message: Dict[str, Any], 
                             flower_client: Any):
         """Send message to Flower client"""
         try:
+            print(f"📤 [MESSAGE HANDLER] Sending to Flower {client_id}: {message.get('type')}")
+            print(f"📤 [MESSAGE HANDLER] Message keys: {list(message.keys())}")
             # flower_client may be a function returning the actual client; resolve it
             client_obj = flower_client(client_id) if callable(flower_client) else flower_client
             if client_obj is None:
+                print(f"❌ [MESSAGE HANDLER] No Flower client available for {client_id}")
                 raise RuntimeError(f"No Flower client available for {client_id}")
 
             if message["type"] == "weights_update":
+                print(f"📤 [MESSAGE HANDLER] Updating weights for Flower client {client_id}")
                 # set_mobile_weights is sync; do not await
                 client_obj.set_mobile_weights(message["weights"])
             elif message["type"] == "training_complete":
+                print(f"📤 [MESSAGE HANDLER] Completing training for Flower client {client_id}")
                 client_obj.complete_training(message["result"])
+            print(f"✅ [MESSAGE HANDLER] Successfully sent to Flower {client_id}")
             logger.debug(f"Sent to Flower client {client_id}: {message['type']}")
         except Exception as e:
+            print(f"❌ [MESSAGE HANDLER] Error sending to Flower {client_id}: {e}")
             logger.error(f"Error sending to Flower client {client_id}: {e}")
             
     async def queue_message(self, context: MessageContext, message: Dict[str, Any]):
@@ -102,11 +113,15 @@ class MessageHandler:
     async def handle_mobile_message(self, client_id: str, message: Dict[str, Any],
                                   flower_client: Any):
         """Handle message from mobile client"""
+        print(f"📱 [MESSAGE HANDLER] Received from mobile {client_id}: {message.get('type')}")
+        print(f"📱 [MESSAGE HANDLER] Message keys: {list(message.keys())}")
+        
         context = MessageContext(client_id=client_id)
         
         if message["type"] == "start_training":
             context.round_num = message.get("round", 0)
             context.config = message.get("config", {})
+            print(f"📱 [MESSAGE HANDLER] Training round: {context.round_num}")
             
         logger.info(f"[MSG] from mobile {client_id}: {message.get('type')} keys={list(message.keys())}")
         await self.queue_message(context, message)
@@ -114,11 +129,15 @@ class MessageHandler:
     async def handle_flower_message(self, client_id: str, message: Dict[str, Any],
                                   websocket_send: Callable):
         """Handle message from Flower client"""
+        print(f"🌸 [MESSAGE HANDLER] Received from Flower {client_id}: {message.get('type')}")
+        print(f"🌸 [MESSAGE HANDLER] Message keys: {list(message.keys())}")
+        
         context = MessageContext(client_id=client_id)
         
         if message["type"] == "fit":
             context.round_num = message.get("round", 0)
             context.config = message.get("config", {})
+            print(f"🌸 [MESSAGE HANDLER] Fit round: {context.round_num}")
             
         await self.queue_message(context, message)
         
@@ -127,6 +146,7 @@ class MessageHandler:
         
         async def handle_start_training(context: MessageContext, message: Dict):
             """Handle training start request from mobile to server"""
+            print(f"🎯 [MESSAGE HANDLER] Handling start_training for {context.client_id}")
             # Forward weights (if any) to Flower client
             await self.send_to_flower(context.client_id, {
                 "type": "weights_update",
@@ -154,6 +174,7 @@ class MessageHandler:
 
         async def handle_training_complete(context: MessageContext, message: Dict):
             """Handle training completion"""
+            print(f"🎯 [MESSAGE HANDLER] Handling training_complete for {context.client_id}")
             await self.send_to_flower(context.client_id, {
                 "type": "training_complete",
                 "result": {
@@ -169,6 +190,7 @@ class MessageHandler:
             
         async def handle_fit_request(context: MessageContext, message: Dict):
             """Handle fit request from Flower: instruct mobile to start training"""
+            print(f"🎯 [MESSAGE HANDLER] Handling fit_request for {context.client_id}")
             await self.send_to_mobile(context.client_id, {
                 "type": "start_training",
                 "round": context.round_num,

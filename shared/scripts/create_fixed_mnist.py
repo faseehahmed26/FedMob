@@ -141,8 +141,8 @@ def main():
     # Create fixed datasets
     train_samples, test_samples = create_fixed_dataset(
         X, y, 
-        train_samples_per_class=10, 
-        test_samples_per_class=2,
+        train_samples_per_class=50, 
+        test_samples_per_class=20,
         random_state=42
     )
     

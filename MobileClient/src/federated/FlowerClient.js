@@ -78,7 +78,7 @@ class FlowerClient {
         }
 
         // Debug: reduce epochs for faster on-device iteration
-        const totalEpochs = 10;
+        const totalEpochs = 1;
         const updateInterval = 1;
         this.trainingEngine.onEpochEnd = async ({
           epoch,

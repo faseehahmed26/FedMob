@@ -119,8 +119,12 @@ class FedMobServer:
         
         return avg_loss, {"accuracy": avg_accuracy, "total_samples": total_samples}
     
-    def evaluate(self, server_round: int, parameters) -> Tuple[float, Dict]:
+    def evaluate(self, server_round: int, parameters, config: Dict[str, str]) -> Tuple[float, Dict]:
         """Global evaluation (optional)"""
+        print(f"🔍 [FLOWER SERVER] evaluate called for round {server_round}")
+        print(f"🔍 [FLOWER SERVER] Parameters type: {type(parameters)}")
+        print(f"🔍 [FLOWER SERVER] Config: {config}")
+        
         # For now, return dummy values
         # In a real implementation, you might evaluate on a global test set
         return 0.0, {"accuracy": 0.0}

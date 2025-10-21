@@ -110,6 +110,35 @@ class DatasetLoader {
   }
 
   /**
+   * Get random samples per class from dataset
+   * @param {Array} samples - Array of sample objects with data and label
+   * @param {number} samplesPerClass - Number of samples to select per class
+   * @returns {Array} Randomly selected samples
+   */
+  getRandomSamplesPerClass(samples, samplesPerClass) {
+    const selectedSamples = [];
+
+    for (let classLabel = 0; classLabel < 10; classLabel++) {
+      // Get all samples for this class
+      const classSamples = samples.filter(
+        sample => sample.label === classLabel,
+      );
+
+      // Shuffle and take the requested number
+      const shuffled = classSamples.sort(() => Math.random() - 0.5);
+      const selected = shuffled.slice(
+        0,
+        Math.min(samplesPerClass, classSamples.length),
+      );
+
+      selectedSamples.push(...selected);
+    }
+
+    // Shuffle the final selection to mix classes
+    return selectedSamples.sort(() => Math.random() - 0.5);
+  }
+
+  /**
    * Load fixed MNIST data from JSON files
    */
   async loadFixedMNISTData() {
@@ -125,19 +154,18 @@ class DatasetLoader {
       console.log(`Loaded ${trainData.samples.length} training samples`);
       console.log(`Loaded ${testData.samples.length} test samples`);
 
-      // Convert training data to tensors
-      // Take 5 samples per class (assuming samples are ordered by class)
-      const samplesPerClass = 10;
-      const trainSamples = [];
-      for (let i = 0; i < 10; i++) {
-        // 10 classes
-        const classSamples = trainData.samples.filter(
-          sample => sample.label === i,
-        );
-        trainSamples.push(...classSamples.slice(0, samplesPerClass));
-      }
+      // Randomly distribute samples for training, testing, and inference
+      const samplesPerClass = 10; // Adjust this number as needed
+      const trainSamples = this.getRandomSamplesPerClass(
+        trainData.samples,
+        samplesPerClass,
+      );
+      const testSamples = this.getRandomSamplesPerClass(testData.samples, 2); // 2 per class for testing
+
       const numTrainSamples = trainSamples.length;
-      console.log(`Selected ${numTrainSamples} training samples (5 per class)`);
+      console.log(
+        `Selected ${numTrainSamples} training samples (${samplesPerClass} per class)`,
+      );
       const imageSize = 28 * 28;
 
       // Extract data and labels
@@ -157,11 +185,10 @@ class DatasetLoader {
       const y_train_flat = tf.tensor1d(trainLabelsArray, 'int32');
 
       // Reshape to (samples, height, width, channels) and one-hot encode labels
-      this.X_train = X_train_flat.reshape([numTrainSamples, 28, 28, 1]);
-      this.y_train = this.oneHotEncode(y_train_flat, 10);
+      this.X_train = X_train_flat.reshape([numTrainSamples, 28, 28, 1]).clone();
+      this.y_train = this.oneHotEncode(y_train_flat, 10).clone();
 
       // Convert test data to tensors
-      const testSamples = testData.samples;
       const numTestSamples = testSamples.length;
 
       const testDataArray = [];
@@ -180,10 +207,10 @@ class DatasetLoader {
       const y_test_flat = tf.tensor1d(testLabelsArray, 'int32');
 
       // Reshape to (samples, height, width, channels) and one-hot encode labels
-      this.X_test = X_test_flat.reshape([numTestSamples, 28, 28, 1]);
-      this.y_test = this.oneHotEncode(y_test_flat, 10);
+      this.X_test = X_test_flat.reshape([numTestSamples, 28, 28, 1]).clone();
+      this.y_test = this.oneHotEncode(y_test_flat, 10).clone();
 
-      // Dispose of intermediate tensors
+      // Now safe to dispose intermediate tensors
       X_train_flat.dispose();
       y_train_flat.dispose();
       X_test_flat.dispose();

@@ -40,13 +40,13 @@ const InferenceScreen = ({ route }) => {
     initializeInference();
   }, []);
 
-  // Load selected model from route params
+  // Load selected model from route params - but only after modelManager is ready
   useEffect(() => {
-    if (route.params?.selectedModel) {
+    if (route.params?.selectedModel && modelManager) {
       setSelectedModel(route.params.selectedModel);
       loadModelForInference(route.params.selectedModel);
     }
-  }, [route.params]);
+  }, [route.params, modelManager]); // Add modelManager as dependency
 
   // Load first test image when test images are loaded
   useEffect(() => {
@@ -58,10 +58,12 @@ const InferenceScreen = ({ route }) => {
   // Initialize TensorFlow and model manager
   const initializeInference = async () => {
     try {
+      console.log('🔧 Initializing inference...');
       await tensorFlowManager.initialize();
       const manager = new ModelManager();
       await manager.initializeModel();
       setModelManager(manager);
+      console.log('✅ Model manager initialized');
 
       // Load real MNIST test data
       await loadRealMNISTTestData();
@@ -71,13 +73,14 @@ const InferenceScreen = ({ route }) => {
     }
   };
 
-  // Load model for inference
+  // Load model for inference - with better error handling
   const loadModelForInference = async modelData => {
     try {
       setLoading(true);
+      console.log('📥 Loading model for inference:', modelData.name);
 
       if (!modelManager) {
-        throw new Error('Model manager not initialized');
+        throw new Error('Model manager not initialized - please wait');
       }
 
       // Wait for model to be ready
@@ -86,10 +89,14 @@ const InferenceScreen = ({ route }) => {
       }
 
       // Load full model data from storage
+      console.log('📚 Loading model data from storage...');
       const fullModelData = await ModelStorageService.loadModel(modelData.id);
+      console.log('📚 Model data loaded:', fullModelData.name);
 
       // Set model weights
+      console.log('⚙️ Setting model weights...');
       await modelManager.setModelWeights(fullModelData.weights);
+      console.log('✅ Model weights set successfully');
 
       setModelLoaded(true);
       Alert.alert('Success', 'Model loaded successfully for inference');
@@ -331,6 +338,30 @@ const InferenceScreen = ({ route }) => {
   //   );
   // };
 
+  // Get random samples per class for inference
+  const getRandomSamplesPerClass = (samples, samplesPerClass) => {
+    const selectedSamples = [];
+
+    for (let classLabel = 0; classLabel < 10; classLabel++) {
+      // Get all samples for this class
+      const classSamples = samples.filter(
+        sample => sample.label === classLabel,
+      );
+
+      // Shuffle and take the requested number
+      const shuffled = classSamples.sort(() => Math.random() - 0.5);
+      const selected = shuffled.slice(
+        0,
+        Math.min(samplesPerClass, classSamples.length),
+      );
+
+      selectedSamples.push(...selected);
+    }
+
+    // Shuffle the final selection to mix classes
+    return selectedSamples.sort(() => Math.random() - 0.5);
+  };
+
   // Load real MNIST test data from JSON
   const loadRealMNISTTestData = async () => {
     try {
@@ -346,8 +377,14 @@ const InferenceScreen = ({ route }) => {
       });
       console.log(`Loaded ${testData.samples.length} real MNIST test samples`);
 
+      // Randomly select samples for inference (2 per class)
+      const inferenceSamples = getRandomSamplesPerClass(testData.samples, 2);
+      console.log(
+        `Selected ${inferenceSamples.length} samples for inference (2 per class)`,
+      );
+
       // Convert to the format expected by the UI
-      const formattedTestImages = testData.samples.map(sample => ({
+      const formattedTestImages = inferenceSamples.map(sample => ({
         // Coerce to numbers in case JSON parser delivered strings
         data: Array.isArray(sample.data) ? sample.data.map(v => Number(v)) : [],
         label: sample.label,
