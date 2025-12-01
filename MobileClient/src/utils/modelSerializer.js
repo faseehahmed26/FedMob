@@ -13,11 +13,20 @@ class ModelSerializer {
    */
   static async serializeWeights(model) {
     const weights = model.getWeights();
-    return weights.map(w => ({
-      shape: Array.from(w.shape),
-      dtype: w.dtype,
-      data: this.tensorToBase64(w),
-    }));
+    console.log(`[MODEL SERIALIZER] Serializing ${weights.length} weight layers`);
+    
+    const serialized = weights.map((w, i) => {
+      const shape = Array.from(w.shape);
+      console.log(`[MODEL SERIALIZER] Layer ${i}: shape=[${shape.join(', ')}], size=${w.size}`);
+      return {
+        shape,
+        dtype: w.dtype,
+        data: this.tensorToBase64(w),
+      };
+    });
+    
+    console.log(`[MODEL SERIALIZER] Serialized ${serialized.length} weight layers`);
+    return serialized;
   }
 
   /**
@@ -41,11 +50,54 @@ class ModelSerializer {
    * @param {Array} serializedWeights - Serialized weights
    */
   static async updateModelWeights(model, serializedWeights) {
-    const weights = serializedWeights.map(w =>
-      tf.tensor(this.base64ToFloat32Array(w.data), w.shape, w.dtype),
-    );
+    console.log(`[MODEL SERIALIZER] Updating model with ${serializedWeights.length} weight layers`);
+    
+    // Get current model weights to validate shapes match
+    const currentWeights = model.getWeights();
+    if (currentWeights.length !== serializedWeights.length) {
+      throw new Error(
+        `Weight count mismatch: model has ${currentWeights.length} layers, received ${serializedWeights.length}`
+      );
+    }
+    
+    // Create weight tensors
+    const weights = serializedWeights.map((w, i) => {
+      const shape = w.shape;
+      const expectedShape = currentWeights[i].shape;
+      
+      // Validate shape matches
+      if (shape.length !== expectedShape.length || 
+          !shape.every((dim, idx) => dim === expectedShape[idx])) {
+        console.warn(
+          `[MODEL SERIALIZER] Layer ${i} shape mismatch: expected [${expectedShape.join(', ')}], got [${shape.join(', ')}]`
+        );
+      } else {
+        console.log(`[MODEL SERIALIZER] Layer ${i}: shape=[${shape.join(', ')}] ✓`);
+      }
+      
+      return tf.tensor(this.base64ToFloat32Array(w.data), w.shape, w.dtype);
+    });
 
+    // Set weights - TensorFlow.js takes ownership, but we dispose to be safe on React Native
     model.setWeights(weights);
+    
+    // Dispose temporary tensors after setWeights() completes
+    // Note: setWeights() takes ownership, but disposing here ensures proper cleanup on React Native
+    weights.forEach(tensor => {
+      if (tensor && typeof tensor.dispose === 'function') {
+        try {
+          // Check if tensor is already disposed to avoid errors
+          if (!tensor.isDisposed) {
+            tensor.dispose();
+          }
+        } catch (e) {
+          // Ignore disposal errors (tensor might already be disposed by setWeights)
+          console.warn(`[MODEL SERIALIZER] Warning during tensor disposal: ${e.message}`);
+        }
+      }
+    });
+    
+    console.log(`[MODEL SERIALIZER] Successfully updated model weights`);
   }
 
   /**

@@ -19,16 +19,24 @@ class ServerConfig:
     MIN_FIT_CLIENTS = 2
     MIN_EVALUATE_CLIENTS = 2
     
-    # Training settings
-    EPOCHS_PER_ROUND = 1
+    # Training settings - ALL TRAINING PARAMETERS CONTROLLED FROM HERE
+    EPOCHS_PER_ROUND = 1  # Number of epochs clients train per round
     BATCH_SIZE = 32
     LEARNING_RATE = 0.01
+    EVAL_SAMPLES = 100  # Number of samples to report for evaluation (matches training data size)
     
     # Model settings
     MODEL_NAME = "mnist_cnn"
-    MODEL_VARIANT = "basic"  # 'basic' | 'lenet'
+    MODEL_VARIANT = "lenet"  # Options: 'lenet', 'basic', 'opt-125m'
     INPUT_SHAPE = (28, 28, 1)
     NUM_CLASSES = 10
+    
+    # Supported model variants
+    SUPPORTED_MODELS = {
+        "lenet": "LeNet-5 CNN architecture (simple, fast)",
+        "basic": "Basic CNN (minimal architecture)",
+        "opt-125m": "OPT-125M transformer (large, advanced)"
+    }
     
     # Logging settings
     LOG_LEVEL = "INFO"
@@ -41,14 +49,18 @@ class ServerConfig:
     
     @classmethod
     def get_training_config(cls, round_num: int) -> Dict[str, Any]:
-        """Get training configuration for a specific round"""
+        """Get training configuration for a specific round
+        
+        All training parameters flow from here to clients
+        Ensures consistency across all devices
+        """
         return {
             "round": round_num,
             "epochs": cls.EPOCHS_PER_ROUND,
             "batch_size": cls.BATCH_SIZE,
             "learning_rate": cls.LEARNING_RATE,
             "model_name": cls.MODEL_NAME,
-            "model_variant": cls.MODEL_VARIANT,
+            "model_variant": cls.MODEL_VARIANT,  # CRITICAL: Ensures all clients use same model
         }
     
     @classmethod

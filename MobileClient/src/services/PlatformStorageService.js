@@ -5,6 +5,14 @@ class PlatformStorageService {
   constructor() {
     this.isWeb = Platform.OS === 'web';
     this.webCache = new Map(); // In-memory cache for web
+    
+    // Storage configuration
+    this.config = {
+      maxModels: 10, // Keep only last 10 models
+      maxStorageMB: 50, // Alert when approaching 50MB
+      warningThresholdMB: 40, // Warn at 40MB
+      emergencyCleanupModels: 5, // In emergency, keep only 5 models
+    };
   }
 
   async saveModel(modelData) {
@@ -85,18 +93,38 @@ class PlatformStorageService {
   async saveModelWeb(modelData) {
     try {
       const modelId = modelData.id || `model_${Date.now()}`;
-      this.webCache.set(modelId, {
+      const modelToSave = {
         ...modelData,
         id: modelId,
         savedAt: new Date().toISOString(),
-      });
+      };
+      
+      // Check storage before saving
+      await this.checkAndCleanupStorage();
+      
+      this.webCache.set(modelId, modelToSave);
 
-      // Also save to localStorage as backup
-      const models = this.getStoredModels();
-      models[modelId] = this.webCache.get(modelId);
-      localStorage.setItem('fedmob_models', JSON.stringify(models));
-
-      console.log(`Model saved to web cache: ${modelId}`);
+      // Try to save to localStorage with error handling
+      try {
+        const models = this.getStoredModels();
+        models[modelId] = modelToSave;
+        localStorage.setItem('fedmob_models', JSON.stringify(models));
+        console.log(`Model saved to web cache: ${modelId}`);
+      } catch (quotaError) {
+        if (quotaError.name === 'QuotaExceededError') {
+          console.warn('Storage quota exceeded, performing emergency cleanup...');
+          await this.emergencyCleanup();
+          
+          // Retry saving after cleanup
+          const models = this.getStoredModels();
+          models[modelId] = modelToSave;
+          localStorage.setItem('fedmob_models', JSON.stringify(models));
+          console.log(`Model saved to web cache after emergency cleanup: ${modelId}`);
+        } else {
+          throw quotaError;
+        }
+      }
+      
       return modelId;
     } catch (error) {
       console.error('Failed to save model to web cache:', error);
@@ -167,6 +195,151 @@ class PlatformStorageService {
       console.warn('Failed to parse stored models:', error);
       return {};
     }
+  }
+
+  // Storage management methods
+  async checkStorageSize() {
+    const storageInfo = await this.getStorageInfoWeb();
+    const sizeMB = parseFloat(storageInfo.totalSizeMB);
+    
+    console.log(`Current storage: ${sizeMB}MB (${storageInfo.totalModels} models)`);
+    
+    if (sizeMB > this.config.warningThresholdMB) {
+      console.warn(`Storage approaching limit: ${sizeMB}MB / ${this.config.maxStorageMB}MB`);
+    }
+    
+    return {
+      sizeMB,
+      isNearLimit: sizeMB > this.config.warningThresholdMB,
+      exceedsLimit: sizeMB > this.config.maxStorageMB,
+      modelCount: storageInfo.totalModels
+    };
+  }
+
+  async checkAndCleanupStorage() {
+    const storageStatus = await this.checkStorageSize();
+    
+    // Always cleanup if we have too many models
+    if (storageStatus.modelCount > this.config.maxModels) {
+      console.log(`Too many models (${storageStatus.modelCount}), cleaning up...`);
+      await this.cleanupOldModels(this.config.maxModels);
+    }
+    
+    // Also cleanup if approaching size limit
+    if (storageStatus.exceedsLimit || storageStatus.isNearLimit) {
+      console.log(`Storage size limit approached (${storageStatus.sizeMB}MB), cleaning up...`);
+      await this.cleanupOldModels(Math.max(5, this.config.maxModels - 3));
+    }
+  }
+
+  async cleanupOldModels(keepCount = this.config.maxModels) {
+    try {
+      const models = this.getStoredModels();
+      const modelList = Object.values(models).sort((a, b) => 
+        new Date(b.savedAt) - new Date(a.savedAt)
+      );
+      
+      if (modelList.length <= keepCount) {
+        console.log(`No cleanup needed: ${modelList.length} models <= ${keepCount} limit`);
+        return;
+      }
+      
+      const modelsToKeep = modelList.slice(0, keepCount);
+      const modelsToDelete = modelList.slice(keepCount);
+      
+      console.log(`Cleaning up ${modelsToDelete.length} old models, keeping ${modelsToKeep.length}`);
+      
+      // Create new models object with only recent models
+      const cleanedModels = {};
+      modelsToKeep.forEach(model => {
+        cleanedModels[model.id] = model;
+        // Keep in cache too
+        this.webCache.set(model.id, model);
+      });
+      
+      // Remove old models from cache
+      modelsToDelete.forEach(model => {
+        this.webCache.delete(model.id);
+        console.log(`Removed old model: ${model.id} (saved: ${model.savedAt})`);
+      });
+      
+      // Update localStorage
+      localStorage.setItem('fedmob_models', JSON.stringify(cleanedModels));
+      
+      const newStorageInfo = await this.getStorageInfoWeb();
+      console.log(`Cleanup completed: ${newStorageInfo.totalModels} models, ${newStorageInfo.totalSizeMB}MB`);
+      
+    } catch (error) {
+      console.error('Failed to cleanup old models:', error);
+      throw error;
+    }
+  }
+
+  async emergencyCleanup() {
+    console.warn('Performing emergency cleanup due to storage quota exceeded');
+    try {
+      // Keep only the most recent models in emergency
+      await this.cleanupOldModels(this.config.emergencyCleanupModels);
+      
+      // If still having issues, clear everything except the newest model
+      const storageStatus = await this.checkStorageSize();
+      if (storageStatus.exceedsLimit) {
+        console.warn('Emergency cleanup: keeping only 1 most recent model');
+        await this.cleanupOldModels(1);
+      }
+    } catch (error) {
+      console.error('Emergency cleanup failed:', error);
+      // Last resort: clear all models
+      console.warn('Last resort: clearing all stored models');
+      localStorage.removeItem('fedmob_models');
+      this.webCache.clear();
+    }
+  }
+
+  // Manual cleanup methods for UI
+  async clearAllModels() {
+    try {
+      if (this.isWeb) {
+        localStorage.removeItem('fedmob_models');
+        this.webCache.clear();
+        console.log('All web models cleared');
+      } else {
+        const models = await this.listModelsMobile();
+        for (const model of models) {
+          await this.deleteModelMobile(model.id);
+        }
+        console.log('All mobile models cleared');
+      }
+    } catch (error) {
+      console.error('Failed to clear all models:', error);
+      throw error;
+    }
+  }
+
+  async getStorageQuotaInfo() {
+    if (!this.isWeb) {
+      return { supported: false, message: 'Storage quota API not available on mobile' };
+    }
+    
+    try {
+      if ('storage' in navigator && 'estimate' in navigator.storage) {
+        const estimate = await navigator.storage.estimate();
+        const quotaMB = estimate.quota ? (estimate.quota / 1024 / 1024).toFixed(2) : 'Unknown';
+        const usageMB = estimate.usage ? (estimate.usage / 1024 / 1024).toFixed(2) : 'Unknown';
+        
+        return {
+          supported: true,
+          quotaMB,
+          usageMB,
+          availableMB: estimate.quota && estimate.usage ? 
+            ((estimate.quota - estimate.usage) / 1024 / 1024).toFixed(2) : 'Unknown'
+        };
+      }
+    } catch (error) {
+      console.warn('Failed to get storage quota info:', error);
+    }
+    
+    return { supported: false, message: 'Storage quota API not supported' };
   }
 
   // Mobile storage methods (using expo-file-system)

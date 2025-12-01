@@ -105,19 +105,43 @@ class MNISTModelUtils:
     
     @staticmethod
     def create_model_architecture(variant: str = "basic") -> Dict[str, Any]:
-        """Create MNIST CNN architecture for given variant ('basic'|'lenet')"""
+        """Create MNIST CNN architecture for given variant
+        
+        Supported variants:
+        - 'basic': Simple CNN (2 conv layers, 1 dense layer)
+        - 'lenet': LeNet-5 architecture
+        - 'opt-125m': OPT-125M transformer (placeholder, not yet implemented)
+        """
         if variant == "lenet":
             return {
                 "input_shape": [28, 28, 1],
                 "num_classes": 10,
                 "layers": [
-                    {"type": "conv2d", "filters": 6, "kernel_size": [5, 5], "activation": "relu", "padding": "same", "input_shape": [28, 28, 1]},
+                    {"type": "conv2d", "filters": 6, "kernel_size": [5, 5], "activation": "relu", "padding": "valid", "input_shape": [28, 28, 1]},
                     {"type": "max_pooling2d", "pool_size": [2, 2], "strides": [2, 2]},
-                    {"type": "conv2d", "filters": 16, "kernel_size": [5, 5], "activation": "relu", "padding": "same"},
+                    {"type": "conv2d", "filters": 16, "kernel_size": [5, 5], "activation": "relu", "padding": "valid"},
                     {"type": "max_pooling2d", "pool_size": [2, 2], "strides": [2, 2]},
                     {"type": "flatten"},
                     {"type": "dense", "units": 120, "activation": "relu"},
                     {"type": "dense", "units": 84, "activation": "relu"},
+                    {"type": "dense", "units": 10, "activation": "softmax"},
+                ],
+            }
+        elif variant == "opt-125m":
+            # Placeholder for OPT-125M transformer model
+            # TODO: Implement full OPT-125M architecture
+            logger.warning("OPT-125M variant is not yet fully implemented. Using basic CNN as fallback.")
+            return {
+                "input_shape": [28, 28, 1],
+                "num_classes": 10,
+                "note": "OPT-125M placeholder - using basic CNN for now",
+                "layers": [
+                    {"type": "conv2d", "filters": 32, "kernel_size": [3, 3], "activation": "relu", "input_shape": [28, 28, 1]},
+                    {"type": "max_pooling2d", "pool_size": [2, 2]},
+                    {"type": "conv2d", "filters": 64, "kernel_size": [3, 3], "activation": "relu"},
+                    {"type": "max_pooling2d", "pool_size": [2, 2]},
+                    {"type": "flatten"},
+                    {"type": "dense", "units": 128, "activation": "relu"},
                     {"type": "dense", "units": 10, "activation": "softmax"},
                 ],
             }
@@ -146,15 +170,28 @@ class MNISTModelUtils:
                 (6,),
                 (5, 5, 6, 16),
                 (16,),
-                # After conv/pool stack, flatten size is 7*7*16 = 784 for 28x28 inputs
-                (7 * 7 * 16, 120),
+                # After conv/pool stack with valid padding: 28->24->12->8->4, so flatten size is 4*4*16 = 256
+                (4 * 4 * 16, 120),
                 (120,),
                 (120, 84),
                 (84,),
                 (84, 10),
                 (10,),
             ]
-        # basic
+        elif variant == "opt-125m":
+            # Placeholder - using same as basic for now
+            logger.warning("OPT-125M variant not yet implemented. Using basic weights shape.")
+            return [
+                (3, 3, 1, 32),
+                (32,),
+                (3, 3, 32, 64),
+                (64,),
+                (5 * 5 * 64, 128),
+                (128,),
+                (128, 10),
+                (10,),
+            ]
+        # basic (default)
         return [
             (3, 3, 1, 32),
             (32,),
@@ -167,17 +204,28 @@ class MNISTModelUtils:
         ]
     
     @staticmethod
-    def validate_mnist_weights(weights: List[np.ndarray]) -> bool:
+    def validate_mnist_weights(weights: List[np.ndarray], variant: str = "lenet") -> bool:
         """Validate MNIST model weights"""
-        expected_shapes = MNISTModelUtils.get_expected_weights_shape()
+        expected_shapes = MNISTModelUtils.get_expected_weights_shape(variant)
+        
+        logger.info(f"Validating {len(weights)} weight layers for variant '{variant}'")
+        logger.info(f"Expected {len(expected_shapes)} layers")
         
         if len(weights) != len(expected_shapes):
             logger.error(f"Expected {len(expected_shapes)} weight layers, got {len(weights)}")
             return False
         
+        all_valid = True
         for i, (weight, expected_shape) in enumerate(zip(weights, expected_shapes)):
             if weight.shape != expected_shape:
                 logger.error(f"Layer {i}: expected shape {expected_shape}, got {weight.shape}")
-                return False
+                all_valid = False
+            else:
+                logger.debug(f"Layer {i}: shape {weight.shape} ✓")
         
-        return True
+        if all_valid:
+            logger.info("✅ All weight shapes validated successfully")
+        else:
+            logger.error("❌ Weight shape validation failed")
+        
+        return all_valid

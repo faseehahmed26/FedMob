@@ -14,6 +14,7 @@ class ModelManager {
       inputShape: [28, 28, 1],
       numClasses: 10,
       learningRate: 0.01,
+      modelVariant: 'lenet', // Ensure consistent LeNet usage
     };
   }
 

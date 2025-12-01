@@ -22,7 +22,9 @@ const TrainingScreen = () => {
   // State management
   const [client, setClient] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
+  // const [serverAddress, setServerAddress] = useState('10.118.29.192:8082');
   const [serverAddress, setServerAddress] = useState('10.5.1.254:8082');
+
   const [clientId, setClientId] = useState(`mobile_${Date.now()}`);
   const [currentRound, setCurrentRound] = useState(0);
   const [trainingStatus, setTrainingStatus] = useState('idle');

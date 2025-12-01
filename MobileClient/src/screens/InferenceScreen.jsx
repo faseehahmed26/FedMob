@@ -63,7 +63,7 @@ const InferenceScreen = ({ route }) => {
       const manager = new ModelManager();
       await manager.initializeModel();
       setModelManager(manager);
-      console.log('✅ Model manager initialized');
+      console.log('Model manager initialized');
 
       // Load real MNIST test data
       await loadRealMNISTTestData();
@@ -94,9 +94,9 @@ const InferenceScreen = ({ route }) => {
       console.log('📚 Model data loaded:', fullModelData.name);
 
       // Set model weights
-      console.log('⚙️ Setting model weights...');
+      console.log('Setting model weights...');
       await modelManager.setModelWeights(fullModelData.weights);
-      console.log('✅ Model weights set successfully');
+      console.log('Model weights set successfully');
 
       setModelLoaded(true);
       Alert.alert('Success', 'Model loaded successfully for inference');
@@ -563,7 +563,7 @@ const InferenceScreen = ({ route }) => {
                     { color: isCorrect() ? '#28a745' : '#dc3545' },
                   ]}
                 >
-                  {isCorrect() ? '✅ Yes' : '❌ No'}
+                  {isCorrect() ? 'Yes' : '❌ No'}
                 </Text>
               </View>
             </View>

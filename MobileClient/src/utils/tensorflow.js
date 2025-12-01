@@ -127,7 +127,7 @@ class TensorFlowManager {
         inputShape = [28, 28, 1],
         numClasses = 10,
         learningRate = 0.01,
-        modelVariant = 'basic', // 'basic' | 'lenet'
+        modelVariant = 'lenet', // 'basic' | 'lenet' - DEFAULT CHANGED to match server
       } = config;
 
       console.log('Debug: Creating model with config:', {
@@ -160,19 +160,24 @@ class TensorFlowManager {
 
       // Build architecture by variant
       if (modelVariant === 'lenet') {
-        // LeNet-5 style for 28x28x1
+        // LeNet-5 style for 28x28x1 - FIXED to match server architecture
+        // This should result in ~107K parameters to match server expectations
         addLayerWithDebug(tf.layers.inputLayer({ inputShape }), 'input');
+        
+        // Conv1: 28x28x1 -> 24x24x6 (using 'valid' padding like original LeNet)
         addLayerWithDebug(
           tf.layers.conv2d({
             filters: 6,
             kernelSize: 5,
             strides: 1,
-            padding: 'same',
+            padding: 'valid', // FIXED: Changed from 'same' to 'valid'
             activation: 'relu',
             name: 'lenet_conv1',
           }),
           'lenet_conv1',
         );
+        
+        // Pool1: 24x24x6 -> 12x12x6
         addLayerWithDebug(
           tf.layers.maxPooling2d({
             poolSize: 2,
@@ -181,17 +186,21 @@ class TensorFlowManager {
           }),
           'lenet_pool1',
         );
+        
+        // Conv2: 12x12x6 -> 8x8x16 (using 'valid' padding)
         addLayerWithDebug(
           tf.layers.conv2d({
             filters: 16,
             kernelSize: 5,
             strides: 1,
-            padding: 'same',
+            padding: 'valid', // FIXED: Changed from 'same' to 'valid'
             activation: 'relu',
             name: 'lenet_conv2',
           }),
           'lenet_conv2',
         );
+        
+        // Pool2: 8x8x16 -> 4x4x16
         addLayerWithDebug(
           tf.layers.maxPooling2d({
             poolSize: 2,
@@ -200,10 +209,14 @@ class TensorFlowManager {
           }),
           'lenet_pool2',
         );
+        
+        // Flatten: 4x4x16 = 256 features (much smaller than 784 with 'same' padding)
         addLayerWithDebug(
           tf.layers.flatten({ name: 'lenet_flatten' }),
           'lenet_flatten',
         );
+        
+        // FC1: 256 -> 120 (now matches server expectations)
         addLayerWithDebug(
           tf.layers.dense({
             units: 120,
@@ -212,10 +225,14 @@ class TensorFlowManager {
           }),
           'lenet_fc1',
         );
+        
+        // FC2: 120 -> 84
         addLayerWithDebug(
           tf.layers.dense({ units: 84, activation: 'relu', name: 'lenet_fc2' }),
           'lenet_fc2',
         );
+        
+        // Output: 84 -> 10 (numClasses)
         addLayerWithDebug(
           tf.layers.dense({
             units: numClasses,

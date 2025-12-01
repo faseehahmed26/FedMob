@@ -22,6 +22,8 @@ class ClientState:
     is_training: bool = False
     current_round: int = 0
     training_progress: float = 0.0
+    fl_session_active: bool = False  # Track if Flower client is connected
+    state: str = "ready"  # States: ready, fl_active, training, completed
     
 class ClientManager:
     """Manages connected clients and their states"""
@@ -63,6 +65,15 @@ class ClientManager:
             client.last_active = time.time()
             logger.info(f"Client {client_id} training progress: {progress}%")
             
+    def start_fl_session(self, client_id: str) -> None:
+        """Mark client as having active FL session (Flower client connected)"""
+        if client_id in self.clients:
+            client = self.clients[client_id]
+            client.fl_session_active = True
+            client.state = "fl_active"
+            client.last_active = time.time()
+            logger.info(f"Client {client_id} entered FL session")
+    
     def start_client_training(self, client_id: str, round_num: int) -> None:
         """Mark client as training"""
         if client_id in self.clients:
@@ -70,6 +81,7 @@ class ClientManager:
             client.is_training = True
             client.current_round = round_num
             client.training_progress = 0.0
+            client.state = "training"
             client.last_active = time.time()
             logger.info(f"Client {client_id} started training round {round_num}")
             
@@ -79,8 +91,21 @@ class ClientManager:
             client = self.clients[client_id]
             client.is_training = False
             client.training_progress = 100.0
+            client.state = "fl_active"  # Back to FL active, waiting for next round
             client.last_active = time.time()
             logger.info(f"Client {client_id} completed training round {client.current_round}")
+    
+    def end_fl_session(self, client_id: str) -> None:
+        """Mark client FL session as ended"""
+        if client_id in self.clients:
+            client = self.clients[client_id]
+            client.fl_session_active = False
+            client.is_training = False
+            client.state = "ready"
+            client.current_round = 0
+            client.training_progress = 0.0
+            client.last_active = time.time()
+            logger.info(f"Client {client_id} ended FL session")
             
     def get_training_clients(self) -> List[ClientState]:
         """Get all clients currently training"""
@@ -116,6 +141,8 @@ class ClientManager:
                 {
                     "id": client.client_id,
                     "status": "training" if client.is_training else "available",
+                    "state": client.state,
+                    "fl_session": client.fl_session_active,
                     "round": client.current_round,
                     "progress": client.training_progress,
                     "connected_for": time.time() - client.connected_at

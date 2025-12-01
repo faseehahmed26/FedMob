@@ -20,6 +20,8 @@ class WebSocketClient {
     this.onTrainingStart = null;
     this.onTrainingComplete = null;
     this.onWeightsReceived = null;
+    this.onWeightsUpdate = null;  // Callback for when server sends weights to apply
+    this.onEvaluateRequest = null;  // Callback for when server requests evaluation
   }
 
   async connect() {
@@ -117,7 +119,21 @@ class WebSocketClient {
     }
 
     try {
-      console.log('WS send →', type, JSON.stringify(payload));
+      // Log only message type and keys, not full payload with weights
+      const payloadKeys = Object.keys(payload);
+      let logMsg = `WS send -> ${type}, keys: [${payloadKeys.join(', ')}]`;
+      
+      // Log weight array length if weights exist
+      if (payload.weights && Array.isArray(payload.weights)) {
+        logMsg += `, weights: ${payload.weights.length} layers`;
+      }
+      
+      // Log num_samples if it exists
+      if (payload.num_samples !== undefined) {
+        logMsg += `, samples: ${payload.num_samples}`;
+      }
+      
+      console.log(logMsg);
       this.ws.send(JSON.stringify(message));
     } catch (error) {
       console.error('Failed to send message:', error);
@@ -161,7 +177,15 @@ class WebSocketClient {
 
   handleMessage(message) {
     const { type } = message;
-    console.log('WS recv ←', type, JSON.stringify(message));
+    // Log only message type and keys, not full message with weights
+    const msgKeys = Object.keys(message);
+    let logMsg = `WS recv <- ${type}, keys: [${msgKeys.join(', ')}]`;
+    
+    if (message.weights && Array.isArray(message.weights)) {
+      logMsg += `, weights: ${message.weights.length} layers`;
+    }
+    
+    console.log(logMsg);
 
     switch (type) {
       case 'register_ack':
@@ -170,8 +194,15 @@ class WebSocketClient {
 
       case 'start_training':
         // Server instructs mobile to begin training for a round
+        // May include weights from server to apply before training
+        if (message.weights && message.weights.length > 0) {
+          console.log(`[WS] Received weights from server: ${message.weights.length} layers`);
+          if (this.onWeightsUpdate) {
+            this.onWeightsUpdate(message.weights);
+          }
+        }
         if (this.onTrainingStart) {
-          this.onTrainingStart(message.round);
+          this.onTrainingStart(message.round, message.config);
         }
         break;
 
@@ -197,6 +228,14 @@ class WebSocketClient {
         }
         break;
 
+      case 'evaluate_request':
+        // Server requests evaluation on current model
+        console.log('[WS] Received evaluation request from server');
+        if (this.onEvaluateRequest) {
+          this.onEvaluateRequest(message.parameters, message.config);
+        }
+        break;
+
       default:
         console.warn('Unknown message type:', type);
     }
@@ -214,8 +253,23 @@ class WebSocketClient {
     await this.send('update_weights', { weights });
   }
 
-  async completeTraining(metrics) {
-    await this.send('training_complete', { metrics });
+  async completeTraining(data) {
+    // data should contain: { weights, num_samples, metrics }
+    await this.send('training_complete', {
+      weights: data.weights || [],
+      num_samples: data.num_samples || 0,
+      metrics: data.metrics || {},
+    });
+  }
+
+  async completeEvaluation(data) {
+    // data should contain: { loss, accuracy, num_examples, metrics }
+    await this.send('evaluate_complete', {
+      loss: data.loss || 0.0,
+      accuracy: data.accuracy || 0.0,
+      num_examples: data.num_examples || 0,
+      metrics: data.metrics || {},
+    });
   }
 
   disconnect() {

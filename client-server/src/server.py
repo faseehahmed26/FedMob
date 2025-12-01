@@ -33,53 +33,34 @@ class ClientServer:
         self.monitor = FedMobMonitor()
         self.flower_manager = FlowerClientManager()
         self.flower_connection = FlowerConnection(flower_server_address)
-        self.message_handler = MessageHandler()
+        self.message_handler = MessageHandler(client_manager=self.client_manager)  # Pass ClientManager
         
     async def handle_client(self, websocket: websockets.WebSocketServerProtocol, path: str):
         """Handle individual client connection"""
         client_id = None
         try:
-            print(f"🔌 [SERVER] New client connection attempt")
+            print(f"[SERVER] New client connection attempt")
             # Wait for client registration
             message = await websocket.recv()
             data = json.loads(message)
             
             if data["type"] == "register":
                 client_id = data["client_id"]
-                print(f"🔌 [SERVER] Client {client_id} connected")
+                print(f"[SERVER] Client {client_id} connected")
                 logger.info(f"Client {client_id} connected")
                 
-                # Add client to managers
+                # Add client to managers (mobile client only, NOT Flower client yet)
                 self.client_manager.add_client(client_id, websocket)
-                print(f"✅ [SERVER] Client {client_id} added to client manager")
-                
-                # Create send function for this client
-                send_fn = lambda msg: self.send_message(client_id, msg)
-                
-                # Create Flower client with proper dependencies
-                flower_client = self.flower_manager.get_or_create_client(
-                    client_id, 
-                    message_handler=self.message_handler,
-                    send_to_mobile=send_fn
-                )
-                print(f"🌸 [SERVER] Created Flower client for {client_id}")
-                
-                # Add to Flower connection
-                self.flower_connection.add_flower_client(client_id, flower_client)
-                
-                # Start Flower client connection
-                success = await self.flower_connection.start_flower_client(client_id, flower_client)
-                if success:
-                    print(f"✅ [SERVER] Flower client started successfully for {client_id}")
-                else:
-                    print(f"❌ [SERVER] Failed to start Flower client for {client_id}")
+                print(f"[SERVER] Client {client_id} registered and ready")
+                print(f"[SERVER] Client {client_id} is now in 'ready' state - waiting for training start")
                 
                 # Send acknowledgment
                 await websocket.send(json.dumps({
                     "type": "register_ack",
-                    "status": "success"
+                    "status": "success",
+                    "message": "Connected. Click 'Start Training' to begin."
                 }))
-                print(f"📤 [SERVER] Sent registration acknowledgment to {client_id}")
+                print(f"[SERVER] Sent registration acknowledgment to {client_id}")
                 
                 # Handle client messages
                 async for message in websocket:
@@ -87,30 +68,39 @@ class ClientServer:
                         data = json.loads(message)
                         await self.handle_message(client_id, data)
                     except json.JSONDecodeError:
-                        print(f"❌ [SERVER] Invalid JSON from client {client_id}")
+                        print(f"[SERVER] Invalid JSON from client {client_id}")
                         logger.error(f"Invalid JSON from client {client_id}")
                         continue
                         
         except Exception as e:
-            print(f"❌ [SERVER] Error handling client: {e}")
+            print(f"[SERVER] Error handling client: {e}")
             logger.error(f"Error handling client: {e}")
         finally:
             if client_id:
-                print(f"🔌 [SERVER] Cleaning up client {client_id}")
+                print(f"[SERVER] Cleaning up client {client_id}")
                 self.client_manager.remove_client(client_id)
-                self.flower_manager.remove_client(client_id)
-                await self.flower_connection.stop_flower_client(client_id)
-                self.flower_connection.remove_flower_client(client_id)
-                print(f"✅ [SERVER] Client {client_id} disconnected")
+                
+                # Clean up Flower client if it exists
+                flower_client = self.flower_manager.get_client(client_id)
+                if flower_client:
+                    print(f"[SERVER] Cleaning up Flower client for {client_id}")
+                    self.client_manager.end_fl_session(client_id)
+                    self.flower_manager.remove_client(client_id)
+                    await self.flower_connection.stop_flower_client(client_id)
+                    self.flower_connection.remove_flower_client(client_id)
+                else:
+                    print(f"[SERVER] No Flower client to clean up for {client_id} (was in ready state only)")
+                    
+                print(f"[SERVER] Client {client_id} disconnected")
                 logger.info(f"Client {client_id} disconnected")
                 
     async def handle_message(self, client_id: str, message: Dict):
         """Handle messages from clients"""
         try:
-            print(f"📨 [SERVER] Handling message from {client_id}: {message.get('type')}")
+            print(f"[SERVER] Handling message from {client_id}: {message.get('type')}")
             client = self.client_manager.get_client(client_id)
             if not client:
-                print(f"❌ [SERVER] Unknown client {client_id}")
+                print(f"[SERVER] Unknown client {client_id}")
                 logger.error(f"Unknown client {client_id}")
                 return
                 
@@ -119,15 +109,15 @@ class ClientServer:
             
             # Get Flower client for this mobile client
             flower_client = self.flower_manager.get_client(client_id)
-            if not flower_client and message_type != "register":
-                print(f"❌ [SERVER] No Flower client for {client_id}")
+            if not flower_client and message_type not in ["register", "start_training"]:
+                print(f"[SERVER] No Flower client for {client_id}")
                 logger.error(f"No Flower client for {client_id}")
                 return
                 
             # Create send function for this client
             send_fn = lambda msg: self.send_message(client_id, msg)
             
-            print(f"📨 [SERVER] Forwarding message to message handler")
+            print(f"[SERVER] Forwarding message to message handler")
             # Handle message through message handler
             await self.message_handler.handle_mobile_message(
                 client_id,
@@ -137,36 +127,93 @@ class ClientServer:
             
             # Update client state based on message type
             if message_type == "start_training":
-                round_num = message.get("round", 0)
-                print(f"🏋️ [SERVER] Starting training for {client_id}, round {round_num}")
-                self.client_manager.start_client_training(client_id, round_num)
+                # User clicked "Start Training" button - initialize FL session
+                print(f"[SERVER] User requested training start for {client_id}")
+                await self.handle_training_start(client_id)
             elif message_type == "training_update":
                 progress = message.get("progress", 0)
-                print(f"📊 [SERVER] Training progress update for {client_id}: {progress}%")
+                print(f"[SERVER] Training progress update for {client_id}: {progress}%")
                 self.client_manager.update_training_progress(client_id, progress)
             elif message_type == "training_complete":
-                print(f"✅ [SERVER] Training completed for {client_id}")
+                print(f"[SERVER] Training completed for {client_id}")
                 self.client_manager.complete_client_training(client_id)
                 
         except Exception as e:
-            print(f"❌ [SERVER] Error handling message from client {client_id}: {e}")
+            print(f"[SERVER] Error handling message from client {client_id}: {e}")
             logger.error(f"Error handling message from client {client_id}: {e}")
+    
+    async def handle_training_start(self, client_id: str):
+        """Handle training start request from mobile client"""
+        try:
+            print(f"[SERVER] Initializing FL session for {client_id}")
+            
+            # Check if Flower client already exists
+            flower_client = self.flower_manager.get_client(client_id)
+            if flower_client:
+                print(f"⚠️ [SERVER] Flower client already exists for {client_id} - training may already be active")
+                return
+            
+            # Create send function for this client
+            send_fn = lambda msg: self.send_message(client_id, msg)
+            
+            # NOW create Flower client (only when training starts)
+            print(f"[SERVER] Creating Flower client for {client_id}")
+            flower_client = self.flower_manager.get_or_create_client(
+                client_id, 
+                message_handler=self.message_handler,
+                send_to_mobile=send_fn
+            )
+            print(f"[SERVER] Flower client created for {client_id}")
+            
+            # Add to Flower connection
+            self.flower_connection.add_flower_client(client_id, flower_client)
+            
+            # Start Flower client connection (connects to Flower server)
+            print(f"[SERVER] Connecting Flower client to Flower server...")
+            success = await self.flower_connection.start_flower_client(client_id, flower_client)
+            
+            if success:
+                print(f"[SERVER] Flower client connected to Flower server for {client_id}")
+                print(f"[SERVER] FL session active - Flower server will coordinate training rounds")
+                
+                # Update client state to FL active
+                self.client_manager.start_fl_session(client_id)
+                
+                # Send confirmation to mobile
+                await self.send_message(client_id, {
+                    "type": "training_session_started",
+                    "status": "success",
+                    "message": "FL session started. Waiting for server to send training instructions..."
+                })
+            else:
+                print(f"[SERVER] Failed to connect Flower client to Flower server for {client_id}")
+                await self.send_message(client_id, {
+                    "type": "training_session_failed",
+                    "status": "error",
+                    "message": "Failed to connect to Flower server"
+                })
+                
+        except Exception as e:
+            print(f"[SERVER] Error starting training for {client_id}: {e}")
+            logger.error(f"Error starting training for {client_id}: {e}")
+            import traceback
+            traceback.print_exc()
             
     async def send_message(self, client_id: str, message: Dict):
         """Send message to specific client"""
         try:
-            print(f"📤 [SERVER] Sending message to {client_id}: {message.get('type')}")
+            print(f"[SERVER] Sending message to {client_id}: {message.get('type')}")
             client = self.client_manager.get_client(client_id)
             if client:
                 # Accept either dict or pre-encoded JSON string
                 payload = json.dumps(message) if isinstance(message, dict) else message
                 await client.websocket.send(payload)
-                print(f"✅ [SERVER] Successfully sent message to {client_id}")
+                print(f"[SERVER] Successfully sent message to {client_id}")
             else:
-                print(f"❌ [SERVER] Cannot send message - unknown client {client_id}")
+                print(f"[SERVER] Cannot send message - unknown client {client_id}")
                 logger.error(f"Cannot send message - unknown client {client_id}")
         except Exception as e:
-            print(f"❌ [SERVER] Error sending message to client {client_id}: {e}")
+            print(f"[SERVER] Error sending message to client {client_id}: {e}")
             logger.error(f"Error sending message to client {client_id}: {e}")
             
     async def cleanup_inactive_clients(self):
@@ -189,21 +236,17 @@ class ClientServer:
     
     async def start(self):
         """Start the WebSocket server"""
-        print(f"🚀 [SERVER] Starting server on {self.host}:{self.port}")
-        print(f"🚀 [SERVER] Flower server address: {self.flower_server_address}")
+        print(f"[SERVER] Starting server on {self.host}:{self.port}")
+        print(f"[SERVER] Flower server address: {self.flower_server_address}")
         logger.info(f"Starting server on {self.host}:{self.port}")
-        
-        # Initialize message handler with current loop
-        self.message_handler.initialize(asyncio.get_event_loop())
-        print(f"✅ [SERVER] Message handler initialized")
         
         # Start cleanup task
         asyncio.create_task(self.cleanup_inactive_clients())
-        print(f"✅ [SERVER] Cleanup task started")
+        print(f"[SERVER] Cleanup task started")
         
-        # Start message handler
-        asyncio.create_task(self.message_handler.start())
-        print(f"✅ [SERVER] Message handler started")
+        # Start message handler (initializes loop and queue, then starts processing)
+        await self.message_handler.start()
+        print(f"[SERVER] Message handler started")
         
         # Create standard message handlers
         def create_send_fn(client_id):
@@ -216,13 +259,13 @@ class ClientServer:
             create_send_fn,
             get_flower_client
         )
-        print(f"✅ [SERVER] Standard message handlers created")
+        print(f"[SERVER] Standard message handlers created")
         
         # Start server
-        print(f"🌐 [SERVER] WebSocket server starting...")
+        print(f"[SERVER] WebSocket server starting...")
         async with websockets.serve(self.handle_client, self.host, self.port):
-            print(f"✅ [SERVER] WebSocket server running on {self.host}:{self.port}")
-            print(f"📱 [SERVER] Ready to accept mobile client connections!")
+            print(f"[SERVER] WebSocket server running on {self.host}:{self.port}")
+            print(f"[SERVER] Ready to accept mobile client connections!")
             try:
                 await asyncio.Future()  # run forever
             finally:
