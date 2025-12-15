@@ -73,8 +73,9 @@ python src/server.py- This bridge can be used for experiments where the mobile a
 - By default it listens on `8082` on your laptop.
 
 ### Terminal 3 – Start Mobile App (`MobileClient/`)
+
 > Note: To run the mobile app on a physical device, you must have the **Expo Go 2.32.2** app (`expo-go-2.32.2.apk`) installed on your phone.
-- You must have **Expo Go 2.32.2**
+
 cd MobileClient
 
 # Install JS dependencies (first time only)
@@ -111,6 +112,4 @@ To reproduce the preliminary results reported in the endterm paper:
 
 Using the default configuration and included datasets should reproduce the qualitative behavior and trends reported in the paper (convergence over rounds, similar accuracy ranges).
 
-
 ---
-
