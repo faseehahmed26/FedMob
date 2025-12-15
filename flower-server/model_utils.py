@@ -11,9 +11,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 class ModelSerializer:
     """Handles model parameter serialization and deserialization"""
-    
+
     @staticmethod
     def serialize_weights(weights: List[np.ndarray]) -> bytes:
         """Serialize model weights to bytes for network transmission"""
@@ -25,35 +26,35 @@ class ModelSerializer:
                     serializable_weights.append(weight.tolist())
                 else:
                     serializable_weights.append(weight)
-            
+
             # Serialize to JSON bytes
             serialized = json.dumps(serializable_weights).encode('utf-8')
             logger.debug(f"Serialized weights: {len(serialized)} bytes")
             return serialized
-            
+
         except Exception as e:
             logger.error(f"Error serializing weights: {e}")
             raise
-    
+
     @staticmethod
     def deserialize_weights(serialized_weights: bytes) -> List[np.ndarray]:
         """Deserialize model weights from bytes"""
         try:
             # Decode JSON bytes
             weights_data = json.loads(serialized_weights.decode('utf-8'))
-            
+
             # Convert back to numpy arrays
             weights = []
             for weight_data in weights_data:
                 weights.append(np.array(weight_data, dtype=np.float32))
-            
+
             logger.debug(f"Deserialized weights: {len(weights)} layers")
             return weights
-            
+
         except Exception as e:
             logger.error(f"Error deserializing weights: {e}")
             raise
-    
+
     @staticmethod
     def weights_to_dict(weights: List[np.ndarray]) -> Dict[str, Any]:
         """Convert weights to dictionary format"""
@@ -62,7 +63,7 @@ class ModelSerializer:
             "shapes": [list(w.shape) for w in weights],
             "dtypes": [str(w.dtype) for w in weights]
         }
-    
+
     @staticmethod
     def dict_to_weights(weights_dict: Dict[str, Any]) -> List[np.ndarray]:
         """Convert dictionary format back to weights"""
@@ -70,28 +71,28 @@ class ModelSerializer:
         for weight_data in weights_dict["weights"]:
             weights.append(np.array(weight_data, dtype=np.float32))
         return weights
-    
+
     @staticmethod
     def validate_weights(weights: List[np.ndarray]) -> bool:
         """Validate that weights are properly formatted"""
         if not weights:
             return False
-        
+
         for weight in weights:
             if not isinstance(weight, np.ndarray):
                 return False
             if not np.isfinite(weight).all():
                 logger.warning("Non-finite values found in weights")
                 return False
-        
+
         return True
-    
+
     @staticmethod
     def get_weights_info(weights: List[np.ndarray]) -> Dict[str, Any]:
         """Get information about weights for logging"""
         total_params = sum(w.size for w in weights)
         total_memory = sum(w.nbytes for w in weights)
-        
+
         return {
             "num_layers": len(weights),
             "total_parameters": total_params,
@@ -100,13 +101,14 @@ class ModelSerializer:
             "dtypes": [str(w.dtype) for w in weights]
         }
 
+
 class MNISTModelUtils:
     """Utilities specific to MNIST model handling"""
-    
+
     @staticmethod
     def create_model_architecture(variant: str = "basic") -> Dict[str, Any]:
         """Create MNIST CNN architecture for given variant
-        
+
         Supported variants:
         - 'basic': Simple CNN (2 conv layers, 1 dense layer)
         - 'lenet': LeNet-5 architecture
@@ -117,10 +119,14 @@ class MNISTModelUtils:
                 "input_shape": [28, 28, 1],
                 "num_classes": 10,
                 "layers": [
-                    {"type": "conv2d", "filters": 6, "kernel_size": [5, 5], "activation": "relu", "padding": "valid", "input_shape": [28, 28, 1]},
-                    {"type": "max_pooling2d", "pool_size": [2, 2], "strides": [2, 2]},
-                    {"type": "conv2d", "filters": 16, "kernel_size": [5, 5], "activation": "relu", "padding": "valid"},
-                    {"type": "max_pooling2d", "pool_size": [2, 2], "strides": [2, 2]},
+                    {"type": "conv2d", "filters": 6, "kernel_size": [
+                        5, 5], "activation": "relu", "padding": "valid", "input_shape": [28, 28, 1]},
+                    {"type": "max_pooling2d", "pool_size": [
+                        2, 2], "strides": [2, 2]},
+                    {"type": "conv2d", "filters": 16, "kernel_size": [
+                        5, 5], "activation": "relu", "padding": "valid"},
+                    {"type": "max_pooling2d", "pool_size": [
+                        2, 2], "strides": [2, 2]},
                     {"type": "flatten"},
                     {"type": "dense", "units": 120, "activation": "relu"},
                     {"type": "dense", "units": 84, "activation": "relu"},
@@ -130,15 +136,18 @@ class MNISTModelUtils:
         elif variant == "opt-125m":
             # Placeholder for OPT-125M transformer model
             # TODO: Implement full OPT-125M architecture
-            logger.warning("OPT-125M variant is not yet fully implemented. Using basic CNN as fallback.")
+            logger.warning(
+                "OPT-125M variant is not yet fully implemented. Using basic CNN as fallback.")
             return {
                 "input_shape": [28, 28, 1],
                 "num_classes": 10,
                 "note": "OPT-125M placeholder - using basic CNN for now",
                 "layers": [
-                    {"type": "conv2d", "filters": 32, "kernel_size": [3, 3], "activation": "relu", "input_shape": [28, 28, 1]},
+                    {"type": "conv2d", "filters": 32, "kernel_size": [
+                        3, 3], "activation": "relu", "input_shape": [28, 28, 1]},
                     {"type": "max_pooling2d", "pool_size": [2, 2]},
-                    {"type": "conv2d", "filters": 64, "kernel_size": [3, 3], "activation": "relu"},
+                    {"type": "conv2d", "filters": 64,
+                        "kernel_size": [3, 3], "activation": "relu"},
                     {"type": "max_pooling2d", "pool_size": [2, 2]},
                     {"type": "flatten"},
                     {"type": "dense", "units": 128, "activation": "relu"},
@@ -150,16 +159,18 @@ class MNISTModelUtils:
             "input_shape": [28, 28, 1],
             "num_classes": 10,
             "layers": [
-                {"type": "conv2d", "filters": 32, "kernel_size": [3, 3], "activation": "relu", "input_shape": [28, 28, 1]},
+                {"type": "conv2d", "filters": 32, "kernel_size": [
+                    3, 3], "activation": "relu", "input_shape": [28, 28, 1]},
                 {"type": "max_pooling2d", "pool_size": [2, 2]},
-                {"type": "conv2d", "filters": 64, "kernel_size": [3, 3], "activation": "relu"},
+                {"type": "conv2d", "filters": 64,
+                    "kernel_size": [3, 3], "activation": "relu"},
                 {"type": "max_pooling2d", "pool_size": [2, 2]},
                 {"type": "flatten"},
                 {"type": "dense", "units": 128, "activation": "relu"},
                 {"type": "dense", "units": 10, "activation": "softmax"},
             ],
         }
-    
+
     @staticmethod
     def get_expected_weights_shape(variant: str = "basic") -> List[tuple]:
         """Get expected shape for MNIST CNN weights for the given variant"""
@@ -180,7 +191,8 @@ class MNISTModelUtils:
             ]
         elif variant == "opt-125m":
             # Placeholder - using same as basic for now
-            logger.warning("OPT-125M variant not yet implemented. Using basic weights shape.")
+            logger.warning(
+                "OPT-125M variant not yet implemented. Using basic weights shape.")
             return [
                 (3, 3, 1, 32),
                 (32,),
@@ -202,30 +214,33 @@ class MNISTModelUtils:
             (128, 10),
             (10,),
         ]
-    
+
     @staticmethod
     def validate_mnist_weights(weights: List[np.ndarray], variant: str = "lenet") -> bool:
         """Validate MNIST model weights"""
         expected_shapes = MNISTModelUtils.get_expected_weights_shape(variant)
-        
-        logger.info(f"Validating {len(weights)} weight layers for variant '{variant}'")
+
+        logger.info(
+            f"Validating {len(weights)} weight layers for variant '{variant}'")
         logger.info(f"Expected {len(expected_shapes)} layers")
-        
+
         if len(weights) != len(expected_shapes):
-            logger.error(f"Expected {len(expected_shapes)} weight layers, got {len(weights)}")
+            logger.error(
+                f"Expected {len(expected_shapes)} weight layers, got {len(weights)}")
             return False
-        
+
         all_valid = True
         for i, (weight, expected_shape) in enumerate(zip(weights, expected_shapes)):
             if weight.shape != expected_shape:
-                logger.error(f"Layer {i}: expected shape {expected_shape}, got {weight.shape}")
+                logger.error(
+                    f"Layer {i}: expected shape {expected_shape}, got {weight.shape}")
                 all_valid = False
             else:
                 logger.debug(f"Layer {i}: shape {weight.shape} ✓")
-        
+
         if all_valid:
-            logger.info("✅ All weight shapes validated successfully")
+            logger.info(" All weight shapes validated successfully")
         else:
-            logger.error("❌ Weight shape validation failed")
-        
+            logger.error(" Weight shape validation failed")
+
         return all_valid

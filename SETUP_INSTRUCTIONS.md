@@ -8,7 +8,6 @@ This guide will help you set up a real federated learning system with your lapto
 
 ### Laptop Requirements:
 - Python 3.8+
-- Docker (for gRPC-Web proxy)
 - Node.js 18+ (for mobile client)
 - Both laptop and phones on the same WiFi network
 
