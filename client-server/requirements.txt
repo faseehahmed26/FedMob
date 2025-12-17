@@ -1,0 +1,4 @@
+tensorflow
+flwr
+websockets==10.4
+numpy<2.0.0

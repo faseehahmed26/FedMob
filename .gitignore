@@ -1,0 +1,144 @@
+# OSX
+#
+.DS_Store
+
+# Xcode
+#
+build/
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+xcuserdata
+*.xccheckout
+*.moved-aside
+DerivedData
+*.hmap
+*.ipa
+*.xcuserstate
+**/.xcode.env.local
+
+# Android/IntelliJ
+#
+build/
+.idea
+.gradle
+local.properties
+*.iml
+*.hprof
+.cxx/
+*.keystore
+!debug.keystore
+.kotlin/
+
+# node.js
+#
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Python
+#
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+flower-server/venv/
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.python-version
+*.egg-info/
+dist/
+build/
+
+# React Native / Expo
+#
+.expo/
+dist/
+web-build/
+.env*.local
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build/
+*.tsbuildinfo
+
+# IDE
+#
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# fastlane
+#
+**/fastlane/report.xml
+**/fastlane/Preview.html
+**/fastlane/screenshots
+**/fastlane/test_output
+
+# Bundle artifact
+*.jsbundle
+
+# Ruby / CocoaPods
+/MobileClient/ios/Pods/
+/vendor/bundle/
+.ruby-version
+Gemfile.lock
+
+# Temporary files
+.metro-health-check*
+*.log
+*.tmp
+*.temp
+.DS_Store
+
+# Testing
+/coverage
+__tests__/**/coverage/
+.jest/
+
+# Yarn
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+
+# Project specific
+#
+flower-server/venv/
+flower-server/*.pyc
+flower-server/logs/
+flower-server/.pytest_cache/
+flower-server/data/
+flower-server/models/
+flower-server/checkpoints/
+MobileClient/src/assets/mnist-data/
+MobileClient/src/assets/models/
+*.pb
+*.h5
+*.tflite
+*.ckpt
+.cache/
+
+# Environment files
+.env*
+.flaskenv*
+!.env.project
+!.env.vault
